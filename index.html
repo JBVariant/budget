@@ -384,6 +384,16 @@ function openI(id,sec){
 }
 function closeI(){ Q.inspId=null; Q.inspSec=null; forceHideOpBar(); render(); }
 function navInspector(dir){
+  // Save current edit value before moving
+  var v=evalE(Q.editVal);
+  if(v!==null){
+    var it=findIt(Q.inspId,Q.inspSec);
+    if(it&&v!==it.value){
+      pushUndo('Edited '+(it?it.label:''));
+      S[Q.inspSec]=S[Q.inspSec].map(function(x){return x.id===Q.inspId?Object.assign({},x,{value:v}):x;});
+      Q.dirty=true; persist(); haptic();
+    }
+  }
   var list=tabItemList(Q.tab);
   var cur=list.findIndex(function(x){return x.id===Q.inspId&&x.sec===Q.inspSec;});
   var next=list[cur+dir];
@@ -476,9 +486,9 @@ function quDone(){
   });
   Q.dirty=true; persist(); haptic(); Q.quStep=-1;
   document.getElementById('qu-container').innerHTML='';
-  render();
+  forceHideOpBar(); render();
 }
-function quClose(){ Q.quStep=-1; document.getElementById('qu-container').innerHTML=''; }
+function quClose(){ Q.quStep=-1; document.getElementById('qu-container').innerHTML=''; forceHideOpBar(); }
 function quToggleMinus(){
   var el=document.getElementById('qu-inp'); if(!el) return;
   var v=el.value.trim();
