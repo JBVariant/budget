@@ -181,7 +181,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .gs-ok{background:var(--green-bg);color:var(--green);border:1px solid var(--green-lt);}
 .gs-idle{background:var(--bg3);color:var(--muted);border:1px solid var(--border);}
 /* Op bar */
-.op-bar{position:fixed;left:0;right:0;bottom:-52px;height:44px;background:#e0e3e8;border-top:1px solid #b0b5bb;display:flex;align-items:center;z-index:200;transition:bottom .15s;max-width:430px;margin:0 auto;}
+
 .op-btn{flex:1;height:44px;border:none;background:transparent;font-size:19px;font-weight:500;color:#1a1a18;cursor:pointer;display:flex;align-items:center;justify-content:center;border-right:1px solid #b0b5bb;-webkit-user-select:none;user-select:none;}
 .op-btn:last-child{border-right:none;}
 .op-btn:active{background:#b8bcc4;}
@@ -190,7 +190,6 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
 </style>
 </head><body>
 
-<div class="op-bar" id="op-bar"></div>
 
 <div class="header">
   <div class="header-top">
@@ -516,7 +515,7 @@ function renderQU(){
     +'<div class="qu-input-wrap">'
     +'<button type="button" onclick="quToggleMinus()" style="font-size:26px;font-weight:300;color:var(--muted);background:transparent;border:none;padding:0 10px 0 0;cursor:pointer;line-height:1;flex-shrink:0;user-select:none">&plusmn;</button>'
     +'<span style="font-size:20px;font-weight:600;color:var(--muted);margin-right:6px">&#163;</span>'
-    +'<input id="qu-inp" class="qu-inp" type="text" inputmode="numeric" placeholder="0.00" value="'+esc(Q.quVals[id]||'')+'"'
+    +'<input id="qu-inp" class="qu-inp" type="text" inputmode="decimal" placeholder="0.00" value="'+esc(Q.quVals[id]||'')+'"'
     +' oninput="Q.quVals[QUICK_IDS[Q.quStep]]=this.value"'
     +' onkeydown="if(event.key===\'Enter\'){'+(isLast?'quDone()':'quNext()')+'}">'
     +'</div>'
@@ -528,7 +527,7 @@ function renderQU(){
     +'</div>'
     +'</div>';
   document.getElementById('qu-container').innerHTML=html;
-  setTimeout(function(){ var el=document.getElementById('qu-inp'); if(el){el.focus();el.select();} opBarShow(el); },60);
+  setTimeout(function(){ var el=document.getElementById('qu-inp'); if(el){el.focus();el.select();}},60);
 }
 
 // ── Snapshots ─────────────────────────────────────────────────────────────────
@@ -779,10 +778,10 @@ function inspHtml(it){
       +'<div class="target-block"><div class="target-block-lbl">Change target</div>'
       +'<div class="target-row">'
       +'<div class="target-seg"><div class="target-seg-lbl">Months</div>'
-      +'<input class="target-inp" id="pt-months" type="number" inputmode="numeric" min="1" max="60" placeholder="12" value="'+(hasMonths?it.targetMonths:'')+'" oninput="if(this.value)document.getElementById(\'pt-amount\').value=\'\'"></div>'
+      +'<input class="target-inp" id="pt-months" type="number" inputmode="decimal" min="1" max="60" placeholder="12" value="'+(hasMonths?it.targetMonths:'')+'" oninput="if(this.value)document.getElementById(\'pt-amount\').value=\'\'"></div>'
       +'<div style="color:var(--dim);padding-bottom:6px;font-size:12px">or</div>'
       +'<div class="target-seg"><div class="target-seg-lbl">Fixed &#163;</div>'
-      +'<input class="target-inp" id="pt-amount" type="number" inputmode="numeric" min="0" placeholder="500" value="'+(!hasMonths&&it.targetAmount!=null?it.targetAmount:'')+'" oninput="if(this.value)document.getElementById(\'pt-months\').value=\'\'"></div>'
+      +'<input class="target-inp" id="pt-amount" type="number" inputmode="decimal" min="0" placeholder="500" value="'+(!hasMonths&&it.targetAmount!=null?it.targetAmount:'')+'" oninput="if(this.value)document.getElementById(\'pt-months\').value=\'\'"></div>'
       +'<button class="abtn" style="padding:6px 11px;align-self:flex-end" onclick="savePotTarget(\''+it.id+'\')">&#x2713;</button>'
       +'</div></div>'
     : '';
@@ -797,7 +796,7 @@ function inspHtml(it){
     +'<p class="hint">Update value &mdash; supports maths e.g. 1500 + 250</p>'
     +'<div class="ewrap">'
     +'<button type="button" onclick="var i=document.getElementById(\'einp\');i.value=i.value.trim().startsWith(\'-\')?i.value.trim().slice(1):i.value.trim()===\'\'?\'-\':\'-\'+i.value.trim();Q.editVal=i.value;" style="font-size:24px;font-weight:300;color:var(--muted);background:transparent;border:none;padding:0 8px 2px 0;cursor:pointer;line-height:1;flex-shrink:0;user-select:none">&plusmn;</button>'
-    +'<input class="einp" id="einp" type="text" inputmode="numeric" value="'+esc(Q.editVal)+'" oninput="Q.editVal=this.value" onkeydown="if(event.key===\'Enter\')confirmEdit();if(event.key===\'Escape\')closeI();" placeholder="'+fmt(it.value)+'">'
+    +'<input class="einp" id="einp" type="text" inputmode="decimal" value="'+esc(Q.editVal)+'" oninput="Q.editVal=this.value" onkeydown="if(event.key===\'Enter\')confirmEdit();if(event.key===\'Escape\')closeI();" placeholder="'+fmt(it.value)+'">'
     +'</div>'
     +'<div class="btnrow">'
     +'<button class="bcanc" onclick="closeI()">Cancel</button>'
@@ -900,7 +899,7 @@ function render(){
       +(Q.editPayday
         ? '<div class="pd-editor">'
           +'<span style="font-size:13px;color:var(--muted)">Payday:</span>'
-          +'<input class="pd-inp" id="pd-inp" type="number" inputmode="numeric" min="1" max="31" value="'+esc(Q.pdVal||String(pd))+'" oninput="Q.pdVal=this.value" onkeydown="if(event.key===\'Enter\')savePayday();if(event.key===\'Escape\'){Q.editPayday=false;render();}">'
+          +'<input class="pd-inp" id="pd-inp" type="number" inputmode="decimal" min="1" max="31" value="'+esc(Q.pdVal||String(pd))+'" oninput="Q.pdVal=this.value" onkeydown="if(event.key===\'Enter\')savePayday();if(event.key===\'Escape\'){Q.editPayday=false;render();}">'
           +'<span style="font-size:13px;color:var(--muted)">of month</span>'
           +'<button class="pd-save" onclick="savePayday()">Save</button>'
           +'<button class="pd-cancel" onclick="Q.editPayday=false;render()">Cancel</button>'
@@ -956,7 +955,7 @@ function render(){
       +'<span style="font-size:11px;font-weight:500;color:var(--muted)">Date</span>'
       +'<input class="hist-inp" type="date" value="'+Q.histDate+'" oninput="Q.histDate=this.value" style="max-width:135px;flex:none">'
       +'</div>'
-      +'<input class="hist-inp" type="text" inputmode="numeric" placeholder="Net worth e.g. 45000" value="'+esc(Q.histNW)+'" oninput="Q.histNW=this.value" onkeydown="if(event.key===\'Enter\')addHistSnap()">'
+      +'<input class="hist-inp" type="text" inputmode="decimal" placeholder="Net worth e.g. 45000" value="'+esc(Q.histNW)+'" oninput="Q.histNW=this.value" onkeydown="if(event.key===\'Enter\')addHistSnap()">'
       +'<button class="abtn" onclick="addHistSnap()">Add</button>'
       +'</div></div>';
     if(snaps.length){
@@ -1038,99 +1037,9 @@ function render(){
     ov.classList.remove('open'); sh.innerHTML='';
   }
 
-  buildOpBar();
-  wireOpBar();
   renderUndoToast();
 }
 
-// ── Op bar (operator toolbar above keyboard) ──────────────────────────────────
-var opBarTarget=null, opBarHideTimer=null;
-var OP_BTNS=[
-  {label:'+',val:'+'},
-  {label:'&minus;',val:'-'},
-  {label:'&times;',val:'*'},
-  {label:'&divide;',val:'/'},
-  {label:'.',val:'.'},
-  {label:'&#x232B;',val:'__del__'},
-  {label:'C',val:'__clear__'}
-];
-function buildOpBar(){
-  var bar=document.getElementById('op-bar'); if(!bar) return;
-  bar.innerHTML=OP_BTNS.map(function(b){
-    return '<button class="op-btn" onmousedown="event.preventDefault()" ontouchstart="event.preventDefault();opInsert(\''+b.val+'\');return false;">'+b.label+'</button>';
-  }).join('');
-}
-function opInsert(val){
-  var el=opBarTarget; if(!el) return;
-  if(val==='__clear__'){ el.value=''; }
-  else if(val==='__del__'){ el.value=el.value.slice(0,-1); }
-  else {
-    var pos=el.selectionStart!=null?el.selectionStart:el.value.length;
-    var v=el.value;
-    el.value=v.slice(0,pos)+val+v.slice(el.selectionEnd!=null?el.selectionEnd:pos);
-    var np=pos+val.length;
-    try{el.setSelectionRange(np,np);}catch(e){}
-  }
-  el.dispatchEvent(new Event('input',{bubbles:true}));
-}
-function forceHideOpBar(){
-  opBarTarget=null;
-  if(opBarHideTimer){clearTimeout(opBarHideTimer);opBarHideTimer=null;}
-  var bar=document.getElementById('op-bar');
-  if(bar){bar.style.bottom='-52px';}
-}
-function positionOpBar(){
-  var bar=document.getElementById('op-bar'); if(!bar) return;
-  if(!opBarTarget){ forceHideOpBar(); return; }
-  var vv=window.visualViewport;
-  if(vv){
-    var kbHeight=window.innerHeight-(vv.offsetTop+vv.height);
-    // If keyboard has collapsed (height < 50px), hide the bar
-    if(kbHeight<50){ forceHideOpBar(); return; }
-    bar.style.bottom=kbHeight+'px';
-  } else {
-    bar.style.bottom='0px';
-  }
-  bar.style.display='flex';
-}
-function opBarShow(el){
-  if(opBarHideTimer){clearTimeout(opBarHideTimer);opBarHideTimer=null;}
-  opBarTarget=el;
-  positionOpBar();
-}
-function opBarHide(){
-  opBarHideTimer=setTimeout(function(){
-    opBarTarget=null;
-    var bar=document.getElementById('op-bar');
-    if(bar){bar.style.bottom='-52px';}
-  },150);
-}
-function wireOpBar(){
-  ['einp','qu-inp'].forEach(function(id){
-    var el=document.getElementById(id); if(!el) return;
-    el.addEventListener('focus',function(){opBarShow(el);});
-    el.addEventListener('blur',opBarHide);
-  });
-  document.querySelectorAll('.hist-inp[inputmode="numeric"]').forEach(function(el){
-    el.addEventListener('focus',function(){opBarShow(el);});
-    el.addEventListener('blur',opBarHide);
-  });
-}
-if(window.visualViewport){
-  window.visualViewport.addEventListener('resize',function(){
-    if(opBarTarget) positionOpBar();
-    else forceHideOpBar();
-  });
-  window.visualViewport.addEventListener('scroll',function(){if(opBarTarget)positionOpBar();});
-}
-// Fallback: hide bar on any click outside an input
-document.addEventListener('touchstart',function(e){
-  if(opBarTarget&&e.target!==opBarTarget&&!e.target.closest('.op-bar')&&!e.target.closest('.op-btn')){
-    // Only hide if the target is not another input that will re-show it
-    if(e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA') forceHideOpBar();
-  }
-},{passive:true});
-buildOpBar();
 
 render();
 </script>
