@@ -382,7 +382,7 @@ function openI(id,sec){
   render();
   setTimeout(function(){ var el=document.getElementById('einp'); if(el){el.focus();el.select();} },80);
 }
-function closeI(){ Q.inspId=null; Q.inspSec=null; render(); }
+function closeI(){ Q.inspId=null; Q.inspSec=null; forceHideOpBar(); render(); }
 function navInspector(dir){
   var list=tabItemList(Q.tab);
   var cur=list.findIndex(function(x){return x.id===Q.inspId&&x.sec===Q.inspSec;});
@@ -1063,12 +1063,21 @@ function opInsert(val){
   }
   el.dispatchEvent(new Event('input',{bubbles:true}));
 }
+function forceHideOpBar(){
+  opBarTarget=null;
+  if(opBarHideTimer){clearTimeout(opBarHideTimer);opBarHideTimer=null;}
+  var bar=document.getElementById('op-bar');
+  if(bar){bar.style.bottom='-52px';}
+}
 function positionOpBar(){
-  var bar=document.getElementById('op-bar'); if(!bar||!opBarTarget) return;
+  var bar=document.getElementById('op-bar'); if(!bar) return;
+  if(!opBarTarget){ forceHideOpBar(); return; }
   var vv=window.visualViewport;
   if(vv){
     var kbHeight=window.innerHeight-(vv.offsetTop+vv.height);
-    bar.style.bottom=Math.max(0,kbHeight)+'px';
+    // If keyboard has collapsed (height < 50px), hide the bar
+    if(kbHeight<50){ forceHideOpBar(); return; }
+    bar.style.bottom=kbHeight+'px';
   } else {
     bar.style.bottom='0px';
   }
@@ -1098,9 +1107,19 @@ function wireOpBar(){
   });
 }
 if(window.visualViewport){
-  window.visualViewport.addEventListener('resize',function(){if(opBarTarget)positionOpBar();});
+  window.visualViewport.addEventListener('resize',function(){
+    if(opBarTarget) positionOpBar();
+    else forceHideOpBar();
+  });
   window.visualViewport.addEventListener('scroll',function(){if(opBarTarget)positionOpBar();});
 }
+// Fallback: hide bar on any click outside an input
+document.addEventListener('touchstart',function(e){
+  if(opBarTarget&&e.target!==opBarTarget&&!e.target.closest('.op-bar')&&!e.target.closest('.op-btn')){
+    // Only hide if the target is not another input that will re-show it
+    if(e.target.tagName!=='INPUT'&&e.target.tagName!=='TEXTAREA') forceHideOpBar();
+  }
+},{passive:true});
 buildOpBar();
 
 render();
