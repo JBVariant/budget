@@ -313,7 +313,7 @@ S.expenses.forEach(function(e){ if(e.type==='pot'&&e.targetMonths==null&&e.targe
 var Q = {
   tab:'overview', srch:'', inspId:null, inspSec:null, editVal:'',
   dirty:false, saveMsg:'', saveTmr:null,
-  addTo:null, addLbl:'', addAmt:'',
+  addTo:null, addLbl:'', addAmt:'', addSection:null,
   chartType:'line', histDate:'', histNW:'',
   undoStack:null, undoTmr:null,
   editPayday:false, pdVal:'',
@@ -409,6 +409,15 @@ function toggleType(id){
   pushUndo('Toggled '+(it?it.label:''));
   S.expenses=S.expenses.map(function(e){return e.id===id?Object.assign({},e,{type:e.type==='pot'?'recurring':'pot',targetMonths:e.targetMonths||12}):e;});
   Q.dirty=true; persist(); render();
+}
+function renameItem(sec,id,label){
+  label=label.trim(); if(!label) return;
+  var it=findIt(id,sec); if(!it||it.label===label) return;
+  S[sec]=S[sec].map(function(x){return x.id===id?Object.assign({},x,{label:label}):x;});
+  Q.dirty=true; persist();
+  // Update title in sheet without full render to avoid losing focus
+  var title=document.querySelector('.stitle');
+  if(title) title.childNodes[0].textContent=label;
 }
 function deleteItem(sec,id){
   var it=findIt(id,sec);
@@ -556,10 +565,11 @@ function addItem(){
   if(!Q.addLbl.trim()) return;
   var v=evalE(Q.addAmt)||0;
   var id='c'+Date.now();
-  if(Q.addTo==='accounts') S.accounts.push({id:id,label:Q.addLbl.trim(),value:v,section:'Other'});
-  else if(Q.addTo==='expenses') S.expenses.push({id:id,label:Q.addLbl.trim(),value:v,monthly:v,type:'recurring'});
-  else if(Q.addTo==='nonLiquid') S.nonLiquid.push({id:id,label:Q.addLbl.trim(),value:v});
-  Q.addTo=null; Q.addLbl=''; Q.addAmt='';
+  var ak=Q.addTo||'';
+  if(ak.indexOf('acc_')===0||ak==='nl_liq') S.accounts.push({id:id,label:Q.addLbl.trim(),value:v,section:Q.addSection||'Other'});
+  else if(ak.indexOf('exp_')===0) S.expenses.push({id:id,label:Q.addLbl.trim(),value:v,monthly:v,type:'recurring'});
+  else if(ak==='nl_nl') S.nonLiquid.push({id:id,label:Q.addLbl.trim(),value:v});
+  Q.addTo=null; Q.addLbl=''; Q.addAmt=''; Q.addSection=null;
   Q.dirty=true; persist(); haptic(); render();
 }
 
@@ -733,7 +743,7 @@ function secHtml(name,items,sec,ak){
       +'<input class="ai ai-flex" placeholder="Label" value="'+esc(Q.addLbl)+'" oninput="Q.addLbl=this.value" onkeydown="if(event.key===\'Enter\')addItem();if(event.key===\'Escape\'){Q.addTo=null;render();}">'
       +'<input class="ai ai-sm" placeholder="&#163;0" value="'+esc(Q.addAmt)+'" oninput="Q.addAmt=this.value" onkeydown="if(event.key===\'Enter\')addItem();if(event.key===\'Escape\'){Q.addTo=null;render();}">'
       +'<button class="abtn" onclick="addItem()">Add</button></div>'
-    : '<div class="addtrig" onclick="Q.addTo=\''+ak+'\';Q.addLbl=\'\';Q.addAmt=\'\';render()">&#xFF0B; Add item</div>';
+    : '<div class="addtrig" onclick="Q.addTo=\''+ak+'\';Q.addSection=\''+name+'\';Q.addLbl=\'\';Q.addAmt=\'\';render()">&#xFF0B; Add item</div>';
   return '<div class="shdr" onclick="toggleC(\''+key+'\')">'
     +'<div class="shdr-l"><span class="caret '+(cl?'cl':'')+'">&#9662;</span><span class="sname">'+esc(name)+'</span></div>'
     +'<span class="stot">'+fmt(tot)+'</span></div>'
@@ -770,7 +780,7 @@ function inspHtml(it){
   return '<div class="shandle"></div>'
     +'<div class="stitle">'+esc(it.label)+'<button class="sclose" onclick="closeI()">&#x2715;</button></div>'
     +'<div class="sbody">'
-    +'<div class="srow"><span class="slbl">Current value</span><span class="sval '+vc(it.value)+'">'+fmt(it.value)+'</span></div>'
+    +'<div class="srow" style="gap:8px">'+'<span class="slbl" style="flex-shrink:0">Name</span>'+'<input style="flex:1;background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:4px 8px;font-family:inherit;font-size:13px;color:var(--text);outline:none;text-align:right" value="'+esc(it.label)+'" oninput="renameItem(Q.inspSec,Q.inspId,this.value)">'+'</div>'+'<div class="srow"><span class="slbl">Current value</span><span class="sval '+vc(it.value)+'">'+fmt(it.value)+'</span></div>'
     +(it.monthly!=null?'<div class="srow"><span class="slbl">Monthly amount</span><span class="sval">'+fmt(it.monthly)+'</span></div>':'')
     +potHtml
     +(it.section?'<div class="srow"><span class="slbl">Group</span><span class="sval">'+esc(it.section)+'</span></div>':'')
