@@ -46,6 +46,12 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .ov-payday-lbl{font-size:11px;color:var(--muted);line-height:1.4;}
 .ov-quickbtn{margin-left:auto;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:10px 18px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;}
 .ov-quickbtn:active{opacity:.85;}
+.qu-edit-btn{background:var(--green-bg);border:1px solid var(--green-lt);color:var(--green);border-radius:8px;padding:5px 12px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;margin-top:6px;width:100%;}
+.qu-edit-btn:active{opacity:.8;}
+.qu-edit-panel{background:var(--bg2);border-top:1px solid var(--border);padding:12px 16px;}
+.qu-edit-panel-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:10px;}
+.qu-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid var(--border);background:var(--bg3);color:var(--muted);margin:0 5px 6px 0;}
+.qu-chip.on{background:var(--green-bg);border-color:var(--green-lt);color:var(--green);}
 .pd-editor{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--bg2);border-bottom:1px solid var(--border);}
 .pd-inp{width:56px;background:var(--bg3);border:1.5px solid var(--accent);border-radius:7px;padding:6px 8px;font-family:inherit;font-size:16px;font-weight:600;color:var(--text);text-align:center;outline:none;}
 .pd-save{background:var(--accent);color:#fff;border:none;border-radius:7px;padding:7px 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;}
@@ -221,7 +227,7 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
 var SKEY = 'jake_bv7';
-var QUICK_IDS = ['acc1','acc2','acc3','acc4','cc1'];
+// QUICK_IDS now stored in S.quickIds (see state init below)
 
 var INIT = {
   payday: 25,
@@ -281,7 +287,8 @@ var INIT = {
     {id:'pot10',label:'Pot 10',value:0,monthly:0,type:'pot',targetMonths:12}
   ],
   collapsed: {},
-  snapshots: []
+  snapshots: [],
+  quickIds: []
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -305,6 +312,7 @@ if(!S.collapsed) S.collapsed={};
 if(!S.snapshots) S.snapshots=[];
 if(S.payday==null) S.payday=25;
 if(!S.gasUrl) S.gasUrl='';
+if(!S.quickIds||S.quickIds.length===0) S.quickIds=S.accounts.map(function(a){return a.id;});
 if(!S.gasSheetName) S.gasSheetName='Budget Snapshots';
 if(!S.gasSheetUrl) S.gasSheetUrl='';
 S.expenses.forEach(function(e){ if(e.type==='pot'&&e.targetMonths==null&&e.targetAmount==null) e.targetMonths=12; });
@@ -316,7 +324,7 @@ var Q = {
   chartType:'line', histDate:'', histNW:'',
   undoStack:null, undoTmr:null,
   editPayday:false, pdVal:'',
-  quStep:-1, quVals:{},
+  quStep:-1, quVals:{}, showQuickEdit:false,
   sheetMsg:null, sheetMsgTmr:null, sheetSyncing:false
 };
 
@@ -485,26 +493,32 @@ function savePayday(){
 }
 
 // ── Quick Update ──────────────────────────────────────────────────────────────
+function toggleQuickId(id){
+  var idx=S.quickIds.indexOf(id);
+  if(idx>-1) S.quickIds.splice(idx,1);
+  else S.quickIds.push(id);
+  persist(); render();
+}
 function startQuickUpdate(){
   Q.quStep=0; Q.quVals={};
-  QUICK_IDS.forEach(function(id){
+  S.quickIds.forEach(function(id){
     var it=findIt(id,'accounts');
     Q.quVals[id]=it?String(it.value):'';
   });
   renderQU();
 }
 function quNext(){
-  var id=QUICK_IDS[Q.quStep];
+  var id=S.quickIds[Q.quStep];
   var v=evalE(Q.quVals[id]);
   if(v!==null) Q.quVals[id]=String(v);
-  if(Q.quStep<QUICK_IDS.length-1){ Q.quStep++; renderQU(); setTimeout(function(){ var el=document.getElementById('qu-inp'); if(el){el.focus();el.select();} },60); }
+  if(Q.quStep<S.quickIds.length-1){ Q.quStep++; renderQU(); setTimeout(function(){ var el=document.getElementById('qu-inp'); if(el){el.focus();el.select();} },60); }
 }
 function quBack(){
   if(Q.quStep>0){ Q.quStep--; renderQU(); setTimeout(function(){ var el=document.getElementById('qu-inp'); if(el){el.focus();el.select();} },60); }
 }
 function quDone(){
   pushUndo('Quick update');
-  QUICK_IDS.forEach(function(id){
+  S.quickIds.forEach(function(id){
     var v=evalE(Q.quVals[id]);
     if(v!==null) S.accounts=S.accounts.map(function(a){return a.id===id?Object.assign({},a,{value:v}):a;});
   });
@@ -517,14 +531,14 @@ function quToggleMinus(){
   var el=document.getElementById('qu-inp'); if(!el) return;
   var v=el.value.trim();
   el.value=v.startsWith('-')?v.slice(1):(v===''?'-':'-'+v);
-  Q.quVals[QUICK_IDS[Q.quStep]]=el.value;
+  Q.quVals[S.quickIds[Q.quStep]]=el.value;
 }
 function renderQU(){
   var step=Q.quStep;
   if(step<0){ document.getElementById('qu-container').innerHTML=''; return; }
-  var id=QUICK_IDS[step];
+  var id=S.quickIds[step];
   var it=findIt(id,'accounts');
-  var total=QUICK_IDS.length;
+  var total=S.quickIds.length;
   var isLast=step===total-1;
   var pct=Math.round((step/total)*100);
   var html='<div class="qu-screen">'
@@ -541,7 +555,7 @@ function renderQU(){
     +'<button type="button" onclick="quToggleMinus()" style="font-size:26px;font-weight:300;color:var(--muted);background:transparent;border:none;padding:0 10px 0 0;cursor:pointer;line-height:1;flex-shrink:0;user-select:none">&plusmn;</button>'
     +'<span style="font-size:20px;font-weight:600;color:var(--muted);margin-right:6px">&#163;</span>'
     +'<input id="qu-inp" class="qu-inp" type="text" inputmode="decimal" placeholder="0.00" value="'+esc(Q.quVals[id]||'')+'"'
-    +' oninput="Q.quVals[QUICK_IDS[Q.quStep]]=this.value"'
+    +' oninput="Q.quVals[S.quickIds[Q.quStep]]=this.value"'
     +' onkeydown="if(event.key===\'Enter\'){'+(isLast?'quDone()':'quNext()')+'}">'
     +'</div>'
     +'<div class="qu-inp-hint">Supports maths &mdash; e.g. 7882 + 500</div>'
@@ -918,9 +932,7 @@ function render(){
       +'<div class="ov-payday-lbl">until payday<br><span style="color:var(--accent);font-size:10px">'+ordinal(pd)+' each month &#x270E;</span></div>'
       +'</div>'
       +'</div>'
-      +'<button class="ov-quickbtn" onclick="startQuickUpdate()">&#x26A1; Quick update</button>'
-      +'</div>'
-      +'</div>'
+      +'<div style="display:flex;flex-direction:column;margin-left:auto">'      +'<button class="ov-quickbtn" onclick="startQuickUpdate()">&#x26A1; Quick update</button>'      +'<button class="qu-edit-btn" onclick="Q.showQuickEdit=!Q.showQuickEdit;render()">'      +(Q.showQuickEdit?'&#x25B2; Hide accounts':'&#x25BC; Choose accounts')+'</button>'      +'</div>'      +'</div>'      +'</div>'      +(Q.showQuickEdit?        '<div class="qu-edit-panel">'        +'<div class="qu-edit-panel-title">Tap to toggle in quick update</div>'        +S.accounts.map(function(a){          var on=S.quickIds.indexOf(a.id)>-1;          return '<span class="qu-chip '+(on?'on':'')+' " onclick="toggleQuickId(\''+a.id+'\')">'+(on?'&#x2713; ':'')+esc(a.label)+'</span>';        }).join('')        +'</div>'      :'')
       +(Q.editPayday
         ? '<div class="pd-editor">'
           +'<span style="font-size:13px;color:var(--muted)">Payday:</span>'
