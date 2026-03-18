@@ -381,7 +381,7 @@ function openI(id,sec){
   render();
   setTimeout(function(){ var el=document.getElementById('einp'); if(el){el.focus();el.select();} },80);
 }
-function closeI(){ Q.inspId=null; Q.inspSec=null; forceHideOpBar(); render(); }
+function closeI(){ Q.inspId=null; Q.inspSec=null; render(); }
 function navInspector(dir){
   // Save current edit value before moving
   var v=evalE(Q.editVal);
@@ -485,9 +485,9 @@ function quDone(){
   });
   Q.dirty=true; persist(); haptic(); Q.quStep=-1;
   document.getElementById('qu-container').innerHTML='';
-  forceHideOpBar(); render();
+  render();
 }
-function quClose(){ Q.quStep=-1; document.getElementById('qu-container').innerHTML=''; forceHideOpBar(); }
+function quClose(){ Q.quStep=-1; document.getElementById('qu-container').innerHTML=''; }
 function quToggleMinus(){
   var el=document.getElementById('qu-inp'); if(!el) return;
   var v=el.value.trim();
