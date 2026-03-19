@@ -288,7 +288,9 @@ var INIT = {
   ],
   collapsed: {},
   snapshots: [],
-  quickIds: []
+  quickIds: [],
+  deletedItems: [],
+  lastAccountUpdate: null
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -313,6 +315,8 @@ if(!S.snapshots) S.snapshots=[];
 if(S.payday==null) S.payday=25;
 if(!S.gasUrl) S.gasUrl='';
 if(!S.quickIds||S.quickIds.length===0) S.quickIds=S.accounts.map(function(a){return a.id;});
+if(!S.deletedItems) S.deletedItems=[];
+if(S.lastAccountUpdate===undefined) S.lastAccountUpdate=null;
 if(!S.gasSheetName) S.gasSheetName='Budget Snapshots';
 if(!S.gasSheetUrl) S.gasSheetUrl='';
 S.expenses.forEach(function(e){ if(e.type==='pot'&&e.targetMonths==null&&e.targetAmount==null) e.targetMonths=12; });
@@ -334,7 +338,7 @@ function persist(){ try{ localStorage.setItem(SKEY,JSON.stringify(S)); }catch(e)
 function totals(){
   var liq=S.accounts.reduce(function(a,x){return a+x.value;},0);
   var nonLiq=S.nonLiquid.reduce(function(a,x){return a+x.value;},0);
-  var rec=S.expenses.filter(function(e){return e.type==='recurring';}).reduce(function(a,e){return a+e.value;},0);
+  var rec=S.expenses.filter(function(e){return e.type==='recurring';}).reduce(function(a,e){return a+calcRecurringValue(e);},0);
   var pots=S.expenses.filter(function(e){return e.type==='pot';}).reduce(function(a,e){return a+e.value;},0);
   var disc=liq-rec-pots;
   var dob=rec>0?Math.round(disc/(rec/30)):999;
@@ -345,6 +349,41 @@ function daysUntilPayday(){
   if(day<=pd) return pd-day;
   var next=new Date(today.getFullYear(),today.getMonth()+1,pd);
   return Math.round((next-today)/(1000*60*60*24));
+}
+function calcRecurringValue(e){
+  // Returns the live deduction amount for a recurring expense based on mode
+  if(e.type!=='recurring') return e.value;
+  var mode=e.recurMode||'manual';
+  if(mode==='manual') return e.value;
+  var today=new Date();
+  var todayDay=today.getDate();
+  var pd=S.payday||25;
+  if(mode==='burn'){
+    // Linear burn: full amount on payday, zero the day before next payday
+    // Work out days since payday and total days in pay period
+    var daysSincePayday, totalDays;
+    if(todayDay>=pd){
+      daysSincePayday=todayDay-pd;
+      // Total days: from this month's payday to next month's payday
+      var thisPayday=new Date(today.getFullYear(),today.getMonth(),pd);
+      var nextPayday=new Date(today.getFullYear(),today.getMonth()+1,pd);
+      totalDays=Math.round((nextPayday-thisPayday)/(1000*60*60*24));
+    } else {
+      // We're before payday this month — pay period started last month
+      var lastPayday=new Date(today.getFullYear(),today.getMonth()-1,pd);
+      var thisPayday2=new Date(today.getFullYear(),today.getMonth(),pd);
+      totalDays=Math.round((thisPayday2-lastPayday)/(1000*60*60*24));
+      daysSincePayday=Math.round((today-lastPayday)/(1000*60*60*24));
+    }
+    var fraction=totalDays>0?1-(daysSincePayday/totalDays):0;
+    return r2(e.monthly*Math.max(0,Math.min(1,fraction)));
+  }
+  if(mode==='bill'){
+    // Bill date: full amount before bill date, zero after
+    var billDay=e.billDay||1;
+    return todayDay<billDay?e.monthly:0;
+  }
+  return e.value;
 }
 function potTarget(e){ return e.targetAmount!=null?e.targetAmount:e.monthly*(e.targetMonths||12); }
 function ppct(e){ var t=potTarget(e); return t>0?Math.min(100,Math.max(0,(e.value/t)*100)):0; }
@@ -411,6 +450,7 @@ function confirmEdit(){
   var it=findIt(Q.inspId,Q.inspSec);
   pushUndo('Edited '+(it?it.label:''));
   S[Q.inspSec]=S[Q.inspSec].map(function(x){return x.id===Q.inspId?Object.assign({},x,{value:v}):x;});
+  if(Q.inspSec==='accounts') S.lastAccountUpdate=new Date().toDateString();
   Q.dirty=true; persist(); haptic();
   setTimeout(closeI,160);
 }
@@ -435,6 +475,15 @@ function renameItem(sec,id,label){
   // Update title in sheet without full render to avoid losing focus
   var title=document.querySelector('.stitle');
   if(title) title.childNodes[0].textContent=label;
+}
+function setRecurMode(id,mode){
+  S.expenses=S.expenses.map(function(e){return e.id===id?Object.assign({},e,{recurMode:mode}):e;});
+  Q.dirty=true; persist(); openI(id,'expenses');
+}
+function setBillDay(id,val){
+  var day=parseInt(val); if(isNaN(day)||day<1||day>31) return;
+  S.expenses=S.expenses.map(function(e){return e.id===id?Object.assign({},e,{billDay:day}):e;});
+  Q.dirty=true; persist();
 }
 function saveMonthly(sec,id,val){
   var v=evalE(String(val)); if(v===null||v<0) return;
@@ -464,6 +513,7 @@ function syncMonthly(val){
 function deleteItem(sec,id){
   var it=findIt(id,sec);
   pushUndo('Deleted '+(it?it.label:''));
+  if(it) S.deletedItems.push({id:id,label:it.label,sec:sec,deletedAt:new Date().toISOString()});
   S[sec]=S[sec].filter(function(x){return x.id!==id;});
   Q.dirty=true; persist(); haptic(true); closeI();
 }
@@ -522,6 +572,7 @@ function quDone(){
     var v=evalE(Q.quVals[id]);
     if(v!==null) S.accounts=S.accounts.map(function(a){return a.id===id?Object.assign({},a,{value:v}):a;});
   });
+  S.lastAccountUpdate=new Date().toDateString();
   Q.dirty=true; persist(); haptic(); Q.quStep=-1;
   document.getElementById('qu-container').innerHTML='';
   render();
@@ -649,6 +700,12 @@ function buildSheetRows(snap){
     rows.push([e.label+' (balance)',e.value]);
     rows.push([e.label+' (target)',r2(potTarget(e))]);
   });
+  // Tombstoned (deleted) items — write dash so sheet rows stay consistent
+  if(S.deletedItems&&S.deletedItems.length){
+    rows.push(['','']);
+    rows.push(['DELETED ITEMS','']);
+    S.deletedItems.forEach(function(d){rows.push([d.label+' (deleted)','-']);});
+  }
   return rows;
 }
 function gsWriteSnapshot(snap){
@@ -771,7 +828,7 @@ function rowsHtml(items,sec){
       +'<div class="bub '+bubc(item.value,isPot,pct)+'"></div>'
       +'<div class="rl">'
       +'<div class="rname">'+esc(item.label)+'</div>'
-      +(isPot?'<div class="pw"><div class="pb '+pcls(pct)+'" style="width:'+pct+'%"></div></div><div class="rsub">'+sub+'</div>':'')
+      +(isPot?'<div class="pw"><div class="pb '+pcls(pct)+'" style="width:'+pct+'%"></div></div><div class="rsub">'+sub+'</div>':item.type==='recurring'&&(item.recurMode==='burn'||item.recurMode==='bill')?'<div class="rsub">'+(item.recurMode==='burn'?'Daily burn':'Bill on '+ordinal(item.billDay||1))+' &middot; today: '+fmt(calcRecurringValue(item))+'</div>':'')
       +'</div>'
       +'<div class="rr">'
       +(isPot?'<span class="bdg bpot">pot</span>':sec==='expenses'?'<span class="bdg brec">rec</span>':'')
@@ -848,7 +905,8 @@ function inspHtml(it){
         +'<button class="insp-nav-btn" onclick="navInspector(1)" '+(hasNext?'':'disabled')+''+'>'+(nextIt?esc(nextIt.label):'')+' &#x2192;</button>'
         +'</div>'
       : '')
-    +(Q.inspSec==='expenses'?'<button class="btog" onclick="toggleType(\''+it.id+'\')">Switch to '+(it.type==='pot'?'recurring':'pot')+'</button>':'')
+    +(!isPot&&Q.inspSec==='expenses'?  '<div style="margin-top:10px;background:var(--bg3);border-radius:8px;padding:10px 12px">'  +'<div style="font-size:11px;font-weight:500;color:var(--muted);margin-bottom:8px">Expense mode</div>'  +'<div style="display:flex;gap:6px">'  +['manual','burn','bill'].map(function(m){    var labels={manual:'Manual',burn:'Daily burn',bill:'Bill date'};    var on=(it.recurMode||'manual')===m;    return '<button onclick="setRecurMode(\''+it.id+'\',\''+m+'\')" style="flex:1;border:1px solid '+(on?'var(--accent)':'var(--border)')+';background:'+(on?'var(--accent)':'var(--bg2)')+';color:'+(on?'#fff':'var(--muted)')+';border-radius:7px;padding:7px 4px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer">'+labels[m]+'</button>';  }).join('')  +'</div>'  +((it.recurMode==='bill')?    '<div style="margin-top:8px;display:flex;align-items:center;gap:8px">'    +'<span style="font-size:12px;color:var(--muted)">Bill leaves on the</span>'    +'<input type="number" inputmode="decimal" min="1" max="31" value="'+(it.billDay||1)+'" style="width:50px;background:var(--bg2);border:1px solid var(--accent);border-radius:6px;padding:5px 7px;font-family:inherit;font-size:13px;text-align:center;outline:none" onchange="setBillDay(\''+it.id+'\',this.value)">'    +'<span style="font-size:12px;color:var(--muted)">of each month</span>'    +'</div>'  :'')  +'<div style="font-size:11px;color:var(--dim);margin-top:8px">'  +((it.recurMode==='burn')?'Deduction reduces linearly from payday to zero.'   :(it.recurMode==='bill')?'Full amount deducted until bill date, then £0.'   :'Value is set manually in the edit field.')  +'</div>'  +'</div>':'')
+        +(Q.inspSec==='expenses'?'<button class="btog" onclick="toggleType(\''+it.id+'\')">Switch to '+(it.type==='pot'?'recurring':'pot')+'</button>':'')
     +'<button class="bdel" onclick="if(confirm(\'Delete this item?\'))deleteItem(\''+Q.inspSec+'\',\''+it.id+'\')">Delete this item</button>'
     +'<div style="height:14px"></div>'
     +'</div>';
@@ -861,12 +919,30 @@ var GAS_CODE = [
   '  var ss = getOrCreateSheet(data.sheetName || "Budget Snapshots");',
   '  var sheet = ss.getSheets()[0];',
   '  var rows = data.rows;',
-  '  var numRows = rows.length;',
-  '  var lastCol = sheet.getLastColumn();',
-  '  var nextCol = Math.max(2, lastCol + 1);',
-  '  sheet.getRange(1,1,numRows,1).setValues(rows.map(function(r){return[r[0]];}));',
-  '  if (lastCol < 1) nextCol = 2;',
-  '  sheet.getRange(1,nextCol,numRows,1).setValues(rows.map(function(r){return[r[1]];}));',
+  '  var nextCol = Math.max(2, sheet.getLastColumn() + 1);',
+  '  // Build a map of existing labels in col A -> row number',
+  '  var lastRow = sheet.getLastRow();',
+  '  var labelMap = {};',
+  '  if (lastRow > 0) {',
+  '    var existingLabels = sheet.getRange(1, 1, lastRow, 1).getValues();',
+  '    existingLabels.forEach(function(r, i) { if(r[0]) labelMap[r[0]] = i + 1; });',
+  '  }',
+  '  // Write each row: find existing row by label, or append at bottom',
+  '  rows.forEach(function(row) {',
+  '    var label = row[0];',
+  '    var value = row[1];',
+  '    var rowNum;',
+  '    if (labelMap[label]) {',
+  '      rowNum = labelMap[label];',
+  '    } else {',
+  '      lastRow++;',
+  '      rowNum = lastRow;',
+  '      sheet.getRange(rowNum, 1).setValue(label);',
+  '      labelMap[label] = rowNum;',
+  '    }',
+  '    sheet.getRange(rowNum, nextCol).setValue(value);',
+  '  });',
+  '  // Write date header in row 1 of next column',
   '  return ContentService',
   '    .createTextOutput(JSON.stringify({status:"ok",sheetUrl:ss.getUrl()}))',
   '    .setMimeType(ContentService.MimeType.JSON);',
@@ -920,6 +996,7 @@ function render(){
   if(Q.tab==='overview'){
     var dc=T.disc>=0?'vg':'vr';
     var days=daysUntilPayday();
+    var isStale=S.lastAccountUpdate!==new Date().toDateString();
     var pd=S.payday||25;
     var dobc=T.dob>60?'b':T.dob>20?'a':'r';
     html='<div class="ov-hero">'
@@ -942,7 +1019,7 @@ function render(){
           +'<button class="pd-cancel" onclick="Q.editPayday=false;render()">Cancel</button>'
           +'</div>'
         : '')
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border)">'
+      +(isStale?'<div style="background:var(--amber-bg);border-bottom:1px solid var(--amber-lt);padding:10px 16px;display:flex;align-items:center;gap:8px">'        +'<span style="font-size:16px">&#x26A0;&#xFE0F;</span>'        +'<div><div style="font-size:12px;font-weight:600;color:var(--amber)">Balances not updated today</div>'        +'<div style="font-size:11px;color:var(--amber)">Ready to spend may be inaccurate</div></div>'        +'</div>':'')      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border)">'
       +[['Liquid',fmt(T.liq),''],['Recurring',fmt(T.rec),'vr'],['In Pots',fmt(T.pots),'va'],['Days buffered',T.dob===999?'&infin;':T.dob+'d',dobc==='r'?'vr':dobc==='a'?'va':'vg']].map(function(x){
         return '<div style="background:var(--bg2);padding:12px 14px"><div style="font-size:11px;color:var(--muted);margin-bottom:3px">'+x[0]+'</div><div style="font-size:16px;font-weight:600" class="'+x[2]+'">'+x[1]+'</div></div>';
       }).join('')
