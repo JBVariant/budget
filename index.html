@@ -719,41 +719,73 @@ function gsImportFromSheet(){
       var resp = JSON.parse(text);
       if(resp.status === 'empty'){ setSheetMsg('Sheet is empty — nothing to import','err'); return; }
       if(resp.status !== 'ok'){ setSheetMsg('Import error: '+(resp.error||'unknown'),'err'); return; }
-      var d = resp.data;
-      // Restore sheet URL if we have it
-      if(resp.sheetUrl && !S.gasSheetUrl){ S.gasSheetUrl = resp.sheetUrl; }
-      // Map sheet labels back onto S.accounts, S.nonLiquid, S.expenses
-      var changed = 0;
-      S.accounts.forEach(function(a){
-        if(d[a.label] !== undefined && d[a.label] !== '' && d[a.label] !== '-'){
-          a.value = parseFloat(d[a.label]) || 0; changed++;
+      if(resp.sheetUrl) S.gasSheetUrl = resp.sheetUrl;
+      // resp.rows = [{label, value}] in sheet order, with section headers
+      var rows = resp.rows;
+      var newAccounts = [], newNonLiquid = [], newExpenses = [];
+      var section = '';
+      var potBalances = {}, potTargets = {};
+      var idCounter = Date.now();
+      rows.forEach(function(row){
+        var lbl = String(row.label).trim();
+        var val = row.value;
+        // Section headers
+        if(lbl==='ACCOUNTS'||lbl==='NON-LIQUID'||lbl==='RECURRING EXPENSES'||lbl==='POTS'||lbl==='DELETED ITEMS'||lbl===''){
+          section = lbl; return;
+        }
+        // Skip summary rows and tombstones
+        if(lbl==='Date'||lbl==='Net Worth'||lbl==='Liquid'||lbl==='Discretionary') return;
+        if(val==='-'||val==='') return;
+        var numVal = parseFloat(val)||0;
+        var id = 'imp_'+(idCounter++);
+        if(section==='ACCOUNTS'){
+          // Try to keep existing account id if label matches
+          var existing = S.accounts.find(function(a){return a.label===lbl;});
+          newAccounts.push({id:existing?existing.id:id, label:lbl, value:numVal,
+            section: existing?existing.section:'Current Accounts'});
+        } else if(section==='NON-LIQUID'){
+          var exNL = S.nonLiquid.find(function(n){return n.label===lbl;});
+          newNonLiquid.push({id:exNL?exNL.id:id, label:lbl, value:numVal});
+        } else if(section==='RECURRING EXPENSES'){
+          var exE = S.expenses.find(function(e){return e.label===lbl&&e.type==='recurring';});
+          newExpenses.push({id:exE?exE.id:id, label:lbl, value:numVal,
+            monthly:exE?exE.monthly:numVal, type:'recurring',
+            recurMode:exE?exE.recurMode:'manual', billDay:exE?exE.billDay:1});
+        } else if(section==='POTS'){
+          // Pots come as "Label (balance)" and "Label (target)"
+          if(lbl.slice(-9)===' (balance)'){
+            var potLbl=lbl.slice(0,-9);
+            potBalances[potLbl]=numVal;
+          } else if(lbl.slice(-8)===' (target)'){
+            var potLbl2=lbl.slice(0,-8);
+            potTargets[potLbl2]=numVal;
+          }
         }
       });
-      S.nonLiquid.forEach(function(n){
-        if(d[n.label] !== undefined && d[n.label] !== '' && d[n.label] !== '-'){
-          n.value = parseFloat(d[n.label]) || 0; changed++;
-        }
+      // Build pot expenses
+      var potLabels = Object.keys(potBalances);
+      potLabels.forEach(function(lbl){
+        var exP = S.expenses.find(function(e){return e.label===lbl&&e.type==='pot';});
+        var target = potTargets[lbl]||0;
+        var monthly = exP ? exP.monthly : (target>0?r2(target/12):0);
+        var targetMonths = exP ? exP.targetMonths : 12;
+        newExpenses.push({id:exP?exP.id:('imp_'+(idCounter++)), label:lbl,
+          value:potBalances[lbl], monthly:monthly, type:'pot',
+          targetMonths:targetMonths});
       });
-      S.expenses.forEach(function(e){
-        // Balance / value
-        var balKey = e.label + ' (balance)';
-        var valKey = e.label;
-        if(e.type === 'pot' && d[balKey] !== undefined && d[balKey] !== '' && d[balKey] !== '-'){
-          e.value = parseFloat(d[balKey]) || 0; changed++;
-        } else if(d[valKey] !== undefined && d[valKey] !== '' && d[valKey] !== '-'){
-          e.value = parseFloat(d[valKey]) || 0; changed++;
-        }
-        // Monthly amount (stored as label + ' (target)' for pots gives annual target)
-        // For recurring we just restore value
-      });
-      // Restore summary fields
-      if(d['Date']) S.lastAccountUpdate = new Date().toDateString();
+      // Replace state
+      S.accounts = newAccounts;
+      S.nonLiquid = newNonLiquid;
+      S.expenses = newExpenses;
+      S.lastAccountUpdate = new Date().toDateString();
+      // Rebuild quickIds to match new account ids
+      S.quickIds = S.accounts.map(function(a){return a.id;});
       Q.dirty = true;
       persist();
-      setSheetMsg('Imported ' + changed + ' values from sheet ✓', 'ok');
+      setSheetMsg('Restored '+newAccounts.length+' accounts, '+newExpenses.length+' expenses ✓','ok');
       render();
     })
-    .catch(function(err){ setSheetMsg('Import failed: ' + err.message, 'err'); })
+    .catch(function(err){ setSheetMsg('Import failed: '+err.message,'err'); })
     .finally(function(){ Q.sheetSyncing = false; render(); });
 }
 function gsWriteSnapshot(snap){
@@ -972,9 +1004,8 @@ var GAS_CODE = [
   '  // Read col A (labels) and last data column (most recent snapshot)',
   '  var labels = sheet.getRange(1, 1, lastRow, 1).getValues().map(function(r){return r[0];});',
   '  var values = sheet.getRange(1, lastCol, lastRow, 1).getValues().map(function(r){return r[0];});',
-  '  var data = {};',
-  '  labels.forEach(function(lbl, i) { if(lbl) data[lbl] = values[i]; });',
-  '  return ContentService.createTextOutput(JSON.stringify({status:"ok",data:data,sheetUrl:ss.getUrl()}))',
+  '  var rows = labels.map(function(lbl,i){return {label:lbl,value:values[i]};});',
+  '  return ContentService.createTextOutput(JSON.stringify({status:"ok",rows:rows,sheetUrl:ss.getUrl()}))',
   '    .setMimeType(ContentService.MimeType.JSON);',
   '}',
   'function doPost(e) {',
