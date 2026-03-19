@@ -708,6 +708,54 @@ function buildSheetRows(snap){
   }
   return rows;
 }
+function gsImportFromSheet(){
+  var url = S.gasUrl && S.gasUrl.trim();
+  if(!url){ alert('No Apps Script URL set. Go to Settings first.'); return; }
+  var sheetName = S.gasSheetName || 'Budget Snapshots';
+  Q.sheetSyncing = true; render();
+  fetch(url + '?sheet=' + encodeURIComponent(sheetName))
+    .then(function(r){ return r.text(); })
+    .then(function(text){
+      var resp = JSON.parse(text);
+      if(resp.status === 'empty'){ setSheetMsg('Sheet is empty — nothing to import','err'); return; }
+      if(resp.status !== 'ok'){ setSheetMsg('Import error: '+(resp.error||'unknown'),'err'); return; }
+      var d = resp.data;
+      // Restore sheet URL if we have it
+      if(resp.sheetUrl && !S.gasSheetUrl){ S.gasSheetUrl = resp.sheetUrl; }
+      // Map sheet labels back onto S.accounts, S.nonLiquid, S.expenses
+      var changed = 0;
+      S.accounts.forEach(function(a){
+        if(d[a.label] !== undefined && d[a.label] !== '' && d[a.label] !== '-'){
+          a.value = parseFloat(d[a.label]) || 0; changed++;
+        }
+      });
+      S.nonLiquid.forEach(function(n){
+        if(d[n.label] !== undefined && d[n.label] !== '' && d[n.label] !== '-'){
+          n.value = parseFloat(d[n.label]) || 0; changed++;
+        }
+      });
+      S.expenses.forEach(function(e){
+        // Balance / value
+        var balKey = e.label + ' (balance)';
+        var valKey = e.label;
+        if(e.type === 'pot' && d[balKey] !== undefined && d[balKey] !== '' && d[balKey] !== '-'){
+          e.value = parseFloat(d[balKey]) || 0; changed++;
+        } else if(d[valKey] !== undefined && d[valKey] !== '' && d[valKey] !== '-'){
+          e.value = parseFloat(d[valKey]) || 0; changed++;
+        }
+        // Monthly amount (stored as label + ' (target)' for pots gives annual target)
+        // For recurring we just restore value
+      });
+      // Restore summary fields
+      if(d['Date']) S.lastAccountUpdate = new Date().toDateString();
+      Q.dirty = true;
+      persist();
+      setSheetMsg('Imported ' + changed + ' values from sheet ✓', 'ok');
+      render();
+    })
+    .catch(function(err){ setSheetMsg('Import failed: ' + err.message, 'err'); })
+    .finally(function(){ Q.sheetSyncing = false; render(); });
+}
 function gsWriteSnapshot(snap){
   var url=S.gasUrl&&S.gasUrl.trim();
   if(!url){ setSheetMsg('Paste your Apps Script URL in Settings','err'); render(); return; }
@@ -911,35 +959,42 @@ function inspHtml(it){
 
 // ── GAS code string (shown in settings) ──────────────────────────────────────
 var GAS_CODE = [
+  'function doGet(e) {',
+  '  var name = (e && e.parameter && e.parameter.sheet) || "Budget Snapshots";',
+  '  var ss = getOrCreateSheet(name);',
+  '  var sheet = ss.getSheets()[0];',
+  '  var lastRow = sheet.getLastRow();',
+  '  var lastCol = sheet.getLastColumn();',
+  '  if (lastRow < 1 || lastCol < 2) {',
+  '    return ContentService.createTextOutput(JSON.stringify({status:"empty"}))',
+  '      .setMimeType(ContentService.MimeType.JSON);',
+  '  }',
+  '  // Read col A (labels) and last data column (most recent snapshot)',
+  '  var labels = sheet.getRange(1, 1, lastRow, 1).getValues().map(function(r){return r[0];});',
+  '  var values = sheet.getRange(1, lastCol, lastRow, 1).getValues().map(function(r){return r[0];});',
+  '  var data = {};',
+  '  labels.forEach(function(lbl, i) { if(lbl) data[lbl] = values[i]; });',
+  '  return ContentService.createTextOutput(JSON.stringify({status:"ok",data:data,sheetUrl:ss.getUrl()}))',
+  '    .setMimeType(ContentService.MimeType.JSON);',
+  '}',
   'function doPost(e) {',
   '  var data = JSON.parse(e.postData.contents);',
   '  var ss = getOrCreateSheet(data.sheetName || "Budget Snapshots");',
   '  var sheet = ss.getSheets()[0];',
   '  var rows = data.rows;',
   '  var nextCol = Math.max(2, sheet.getLastColumn() + 1);',
-  '  // Build a map of existing labels in col A -> row number',
   '  var lastRow = sheet.getLastRow();',
   '  var labelMap = {};',
   '  if (lastRow > 0) {',
   '    var existingLabels = sheet.getRange(1, 1, lastRow, 1).getValues();',
   '    existingLabels.forEach(function(r, i) { if(r[0]) labelMap[r[0]] = i + 1; });',
   '  }',
-  '  // Write each row: find existing row by label, or append at bottom',
   '  rows.forEach(function(row) {',
-  '    var label = row[0];',
-  '    var value = row[1];',
-  '    var rowNum;',
-  '    if (labelMap[label]) {',
-  '      rowNum = labelMap[label];',
-  '    } else {',
-  '      lastRow++;',
-  '      rowNum = lastRow;',
-  '      sheet.getRange(rowNum, 1).setValue(label);',
-  '      labelMap[label] = rowNum;',
-  '    }',
+  '    var label = row[0]; var value = row[1]; var rowNum;',
+  '    if (labelMap[label]) { rowNum = labelMap[label]; }',
+  '    else { lastRow++; rowNum = lastRow; sheet.getRange(rowNum, 1).setValue(label); labelMap[label] = rowNum; }',
   '    sheet.getRange(rowNum, nextCol).setValue(value);',
   '  });',
-  '  // Write date header in row 1 of next column',
   '  return ContentService',
   '    .createTextOutput(JSON.stringify({status:"ok",sheetUrl:ss.getUrl()}))',
   '    .setMimeType(ContentService.MimeType.JSON);',
@@ -1102,6 +1157,13 @@ function render(){
           +'<div><div class="set-lbl" style="color:var(--green)">&#x2713; Connected</div>'
           +'<div class="set-sub">Snapshots sync automatically on save</div></div>'
           +'<button style="font-size:12px;color:var(--red);background:transparent;border:none;cursor:pointer;padding:4px 0" onclick="S.gasUrl=\'\';S.gasSheetUrl=\'\';persist();render()">Disconnect</button>'
+          +'</div>'
+          +'<div class="set-row">'
+          +'<div><div class="set-lbl">Restore from sheet</div>'
+          +'<div class="set-sub">Imports latest snapshot values into the app</div></div>'
+          +'<button style="font-size:12px;font-weight:600;color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-lt);border-radius:7px;padding:5px 12px;cursor:pointer;font-family:inherit" onclick="if(confirm(\'Replace all current app data with the latest snapshot from Google Sheets?\'))gsImportFromSheet()">'
+          +(Q.sheetSyncing?'Importing…':'Import ↓')
+          +'</button>'
           +'</div>'
         : '')
       +(S.gasSheetUrl
