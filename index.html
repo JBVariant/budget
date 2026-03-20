@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="en"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
@@ -194,8 +195,8 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 input[type=number]{-moz-appearance:textfield;}
 input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;}
 </style>
-</head><body>
 
+</head><body>
 
 <div class="header">
   <div class="header-top">
@@ -224,6 +225,7 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
 <div id="qu-container"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
 var SKEY = 'jake_bv7';
@@ -358,30 +360,43 @@ function calcRecurringValue(e){
   var today=new Date();
   var todayDay=today.getDate();
   var pd=S.payday||25;
+  // Work out current pay period boundaries (payday-to-payday)
+  // lastPayday = most recent payday that has already occurred
+  // nextPayday = next upcoming payday
+  var lastPayday, nextPayday;
+  if(todayDay>=pd){
+    lastPayday=new Date(today.getFullYear(),today.getMonth(),pd);
+    nextPayday=new Date(today.getFullYear(),today.getMonth()+1,pd);
+  } else {
+    lastPayday=new Date(today.getFullYear(),today.getMonth()-1,pd);
+    nextPayday=new Date(today.getFullYear(),today.getMonth(),pd);
+  }
   if(mode==='burn'){
     // Linear burn: full amount on payday, zero the day before next payday
-    // Work out days since payday and total days in pay period
-    var daysSincePayday, totalDays;
-    if(todayDay>=pd){
-      daysSincePayday=todayDay-pd;
-      // Total days: from this month's payday to next month's payday
-      var thisPayday=new Date(today.getFullYear(),today.getMonth(),pd);
-      var nextPayday=new Date(today.getFullYear(),today.getMonth()+1,pd);
-      totalDays=Math.round((nextPayday-thisPayday)/(1000*60*60*24));
-    } else {
-      // We're before payday this month — pay period started last month
-      var lastPayday=new Date(today.getFullYear(),today.getMonth()-1,pd);
-      var thisPayday2=new Date(today.getFullYear(),today.getMonth(),pd);
-      totalDays=Math.round((thisPayday2-lastPayday)/(1000*60*60*24));
-      daysSincePayday=Math.round((today-lastPayday)/(1000*60*60*24));
-    }
+    var totalDays=Math.round((nextPayday-lastPayday)/(1000*60*60*24));
+    var daysSincePayday=Math.round((today-lastPayday)/(1000*60*60*24));
     var fraction=totalDays>0?1-(daysSincePayday/totalDays):0;
     return r2(e.monthly*Math.max(0,Math.min(1,fraction)));
   }
   if(mode==='bill'){
-    // Bill date: full amount before bill date, zero after
+    // Bill is "still to come" if its date falls AFTER today within the current pay period,
+    // or if it falls between today and the next payday (even across a month boundary).
+    // i.e. deduct if the bill hasn't left yet this pay period.
     var billDay=e.billDay||1;
-    return todayDay<billDay?e.monthly:0;
+    // Find the next occurrence of billDay on or after today
+    var billThisMonth=new Date(today.getFullYear(),today.getMonth(),billDay);
+    var billNextMonth=new Date(today.getFullYear(),today.getMonth()+1,billDay);
+    // The relevant bill date: whichever of this month or next month falls
+    // within [today, nextPayday)
+    var billDate;
+    if(billThisMonth>=today&&billThisMonth<nextPayday){
+      billDate=billThisMonth; // bill is upcoming this month before next payday
+    } else if(billNextMonth>=today&&billNextMonth<nextPayday){
+      billDate=billNextMonth; // bill is upcoming next month before next payday
+    } else {
+      billDate=null; // bill already passed this pay period
+    }
+    return billDate!==null?e.monthly:0;
   }
   return e.value;
 }
@@ -753,11 +768,11 @@ function gsImportFromSheet(){
             recurMode:exE?exE.recurMode:'manual', billDay:exE?exE.billDay:1});
         } else if(section==='POTS'){
           // Pots come as "Label (balance)" and "Label (target)"
-          if(lbl.slice(-9)===' (balance)'){
-            var potLbl=lbl.slice(0,-9);
+          if(lbl.slice(-10)===' (balance)'){
+            var potLbl=lbl.slice(0,-10);
             potBalances[potLbl]=numVal;
-          } else if(lbl.slice(-8)===' (target)'){
-            var potLbl2=lbl.slice(0,-8);
+          } else if(lbl.slice(-9)===' (target)'){
+            var potLbl2=lbl.slice(0,-9);
             potTargets[potLbl2]=numVal;
           }
         }
@@ -1247,4 +1262,5 @@ function render(){
 
 render();
 </script>
+
 </body></html>
