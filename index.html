@@ -6,11 +6,11 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="1">
+<meta name="app-version" content="2">
 <script>
 // Version check: if cached version differs from this version, force reload
 (function(){
-  var VERSION = '1';
+  var VERSION = '2';
   var stored = localStorage.getItem('app_version');
   if(stored && stored !== VERSION){
     localStorage.setItem('app_version', VERSION);
@@ -55,21 +55,21 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:var(--bg);color:var(-
 .dot{width:7px;height:7px;border-radius:50%;background:#e6aa00;display:inline-block;margin-right:5px;vertical-align:middle;}
 /* Overview */
 /* Overview hero — dusty blue */
-.ov-hero{background:var(–hero-bg);padding:28px 20px 24px;position:relative;overflow:hidden;}
+.ov-hero{background:#5b7fa6;background:var(–hero-bg);padding:28px 20px 24px;position:relative;overflow:hidden;}
 
-.ov-disc-label{font-size:11px;font-weight:500;color:var(–hero-muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;}
-.ov-disc-num{font-size:48px;font-weight:600;letter-spacing:-2px;line-height:1;color:var(–hero-text);}
-.ov-disc-num.neg{color:#ffb3a0;}
-.ov-per-day{font-size:13px;color:var(–hero-muted);margin-top:6px;}
+.ov-disc-label{font-size:11px;font-weight:500;color:rgba(255,255,255,0.7);color:var(–hero-muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;}
+.ov-disc-num{font-size:48px;font-weight:600;letter-spacing:-2px;line-height:1;color:#fff;color:var(–hero-text);}
+.ov-disc-num.neg{color:#ffb3a0 !important;}
+.ov-per-day{font-size:13px;color:rgba(255,255,255,0.7);color:var(–hero-muted);margin-top:6px;}
 .ov-per-day strong{color:var(–hero-text);font-weight:600;}
 .ov-meta{display:flex;align-items:stretch;gap:10px;margin-top:20px;}
 .ov-payday{display:flex;flex-direction:column;gap:2px;cursor:pointer;padding:10px 14px;background:rgba(255,255,255,0.14);border-radius:10px;border:1px solid rgba(255,255,255,0.2);flex:1;}
 .ov-payday:active{background:rgba(255,255,255,0.22);}
-.ov-payday-num{font-size:22px;font-weight:600;color:var(–hero-text);line-height:1;}
-.ov-payday-lbl{font-size:11px;color:var(–hero-muted);line-height:1.4;}
+.ov-payday-num{font-size:22px;font-weight:600;color:#fff;color:var(–hero-text);line-height:1;}
+.ov-payday-lbl{font-size:11px;color:rgba(255,255,255,0.7);color:var(–hero-muted);line-height:1.4;}
 /* Pay period progress */
 .ov-progress-wrap{margin-top:16px;}
-.ov-progress-label{display:flex;justify-content:space-between;font-size:11px;color:var(–hero-muted);margin-bottom:5px;}
+.ov-progress-label{display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,0.7);color:var(–hero-muted);margin-bottom:5px;}
 .ov-progress-track{height:6px;background:rgba(255,255,255,0.2);border-radius:3px;overflow:hidden;}
 .ov-progress-bar{height:100%;border-radius:3px;background:rgba(255,255,255,0.85);transition:width .3s;}
 .ov-progress-runway{position:absolute;height:100%;background:rgba(255,200,120,0.5);border-radius:3px;}
