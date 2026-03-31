@@ -1,16 +1,15 @@
 <!DOCTYPE html>
-
 <html lang="en"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="3">
+<meta name="app-version" content="4">
 <script>
 // Version check: if cached version differs from this version, force reload
 (function(){
-  var VERSION = '3';
+  var VERSION = '4';
   var stored = localStorage.getItem('app_version');
   if(stored && stored !== VERSION){
     localStorage.setItem('app_version', VERSION);
@@ -45,11 +44,12 @@ html,body{height:100%;overflow:hidden;}
 body{font-family:'DM Sans',system-ui,sans-serif;background:#f7f4ee;color:#1e1c18;max-width:430px;margin:0 auto;font-size:14px;line-height:1.4;display:flex;flex-direction:column;}
 /* Layout */
 
+
 .main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
-.tabbar{height:var(–tabh);background:#fdfcf8;border-top:1px solid #d4cdc0;display:flex;flex-shrink:0;}
+.tabbar{height:var(--tabh);background:#fdfcf8;border-top:1px solid #d4cdc0;display:flex;flex-shrink:0;}
 .tbb{flex:1;border:none;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;font-family:inherit;color:#a89f92;font-size:9px;font-weight:500;padding-top:3px;letter-spacing:.03em;}
 .tbb.on{color:#c06040;}.tbb.on .tbb-icon{background:#f9ede8;border-radius:12px;}
-.savebar{height:var(–saveh);background:#fdfcf8;border-top:1px solid #e6e0d4;padding:0 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px;}
+.savebar{height:var(--saveh);background:#fdfcf8;border-top:1px solid #e6e0d4;padding:0 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px;}
 .savebtn{background:#c06040;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;}
 .savebtn:disabled{opacity:.35;cursor:default;}
 .dot{width:7px;height:7px;border-radius:50%;background:#e6aa00;display:inline-block;margin-right:5px;vertical-align:middle;}
@@ -167,7 +167,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:#f7f4ee;color:#1e1c18
 .target-inp{width:100%;background:#fdfcf8;border:1px solid #e6e0d4;border-radius:7px;padding:6px 8px;font-family:inherit;font-size:13px;color:#1e1c18;outline:none;-webkit-appearance:none;}
 .target-inp:focus{border-color:#c06040;}
 /* Undo toast */
-.undo-toast{position:fixed;bottom:calc(var(–tabh) + var(–saveh) + 10px);left:50%;transform:translateX(-50%);background:#1a1a18;color:#fff;border-radius:10px;padding:10px 14px;font-size:13px;display:flex;align-items:center;gap:12px;z-index:60;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.25);}
+.undo-toast{position:fixed;bottom:calc(var(--tabh) + var(--saveh) + 10px);left:50%;transform:translateX(-50%);background:#1a1a18;color:#fff;border-radius:10px;padding:10px 14px;font-size:13px;display:flex;align-items:center;gap:12px;z-index:60;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.25);}
 .undo-btn{background:#fff8e6;color:#8a6200;border:1px solid #fde99a;border-radius:6px;padding:4px 10px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;}
 /* Quick update */
 .qu-screen{position:fixed;inset:0;background:#fdfcf8;z-index:70;display:flex;flex-direction:column;max-width:430px;margin:0 auto;}
@@ -225,8 +225,10 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:#f7f4ee;color:#1e1c18
 input[type=number]{-moz-appearance:textfield;}
 input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;}
 </style>
-
 </head><body>
+
+
+
 
 <div class="main" id="main"></div>
 
@@ -244,7 +246,6 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
 <div id="qu-container"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
 var SKEY = 'jake_bv7';
@@ -398,22 +399,26 @@ function calcRecurringValue(e){
     return r2(e.monthly*Math.max(0,Math.min(1,fraction)));
   }
   if(mode==='bill'){
-    // Bill is "still to come" if its date falls AFTER today within the current pay period,
-    // or if it falls between today and the next payday (even across a month boundary).
-    // i.e. deduct if the bill hasn't left yet this pay period.
     var billDay=e.billDay||1;
-    // Find the next occurrence of billDay on or after today
     var billThisMonth=new Date(today.getFullYear(),today.getMonth(),billDay);
     var billNextMonth=new Date(today.getFullYear(),today.getMonth()+1,billDay);
-    // The relevant bill date: whichever of this month or next month falls
-    // within [today, nextPayday)
     var billDate;
     if(billThisMonth>=today&&billThisMonth<nextPayday){
-      billDate=billThisMonth; // bill is upcoming this month before next payday
+      billDate=billThisMonth;
     } else if(billNextMonth>=today&&billNextMonth<nextPayday){
-      billDate=billNextMonth; // bill is upcoming next month before next payday
+      billDate=billNextMonth;
     } else {
-      billDate=null; // bill already passed this pay period
+      billDate=null;
+    }
+    // If manually marked as paid, return 0 until the bill date passes naturally
+    if(e.paidUntil){
+      var paidUntil=new Date(e.paidUntil);
+      if(today<paidUntil) return 0; // still within the "paid early" window
+      // Bill date has now passed — clear the paidUntil flag
+      S.expenses=S.expenses.map(function(x){
+        return x.id===e.id?Object.assign({},x,{paidUntil:null}):x;
+      });
+      persist();
     }
     return billDate!==null?e.monthly:0;
   }
@@ -559,6 +564,39 @@ function calcMortgage(it){
 function setRecurMode(id,mode){
   S.expenses=S.expenses.map(function(e){return e.id===id?Object.assign({},e,{recurMode:mode}):e;});
   Q.dirty=true; persist(); openI(id,'expenses');
+}
+function markAsPaid(id){
+  var e=findIt(id,'expenses');
+  if(!e||e.recurMode!=='bill') return;
+  // Set paidUntil to the bill date that would have been deducted
+  var today=new Date();
+  var billDay=e.billDay||1;
+  var billThisMonth=new Date(today.getFullYear(),today.getMonth(),billDay);
+  var billNextMonth=new Date(today.getFullYear(),today.getMonth()+1,billDay);
+  var pd=S.payday||25;
+  var todayDay=today.getDate();
+  var nextPayday=todayDay>=pd
+    ?new Date(today.getFullYear(),today.getMonth()+1,pd)
+    :new Date(today.getFullYear(),today.getMonth(),pd);
+  var billDate;
+  if(billThisMonth>=today&&billThisMonth<nextPayday) billDate=billThisMonth;
+  else if(billNextMonth>=today&&billNextMonth<nextPayday) billDate=billNextMonth;
+  else billDate=billNextMonth; // already passed — use next occurrence
+  // paidUntil = the day after the bill date (so it clears once bill date passes)
+  var paidUntil=new Date(billDate);
+  paidUntil.setDate(paidUntil.getDate()+1);
+  S.expenses=S.expenses.map(function(x){
+    return x.id===id?Object.assign({},x,{paidUntil:paidUntil.toISOString()}):x;
+  });
+  Q.dirty=true; persist(); haptic();
+  openI(id,'expenses');
+}
+function clearPaid(id){
+  S.expenses=S.expenses.map(function(x){
+    return x.id===id?Object.assign({},x,{paidUntil:null}):x;
+  });
+  Q.dirty=true; persist();
+  openI(id,'expenses');
 }
 function setBillDay(id,val){
   var day=parseInt(val); if(isNaN(day)||day<1||day>31) return;
@@ -988,7 +1026,7 @@ function rowsHtml(items,sec){
       +'<div class="bub '+bubc(item.value,isPot,pct)+'"></div>'
       +'<div class="rl">'
       +'<div class="rname">'+esc(item.label)+'</div>'
-      +(isPot?'<div class="pw"><div class="pb '+pcls(pct)+'" style="width:'+pct+'%"></div></div><div class="rsub">'+sub+'</div>':item.type==='recurring'&&(item.recurMode==='burn'||item.recurMode==='bill')?'<div class="rsub">'+(item.recurMode==='burn'?'Daily burn':'Bill on '+ordinal(item.billDay||1))+' &middot; today: '+fmt(calcRecurringValue(item))+'</div>':'')
+      +(isPot?'<div class="pw"><div class="pb '+pcls(pct)+'" style="width:'+pct+'%"></div></div><div class="rsub">'+sub+'</div>':item.type==='recurring'&&(item.recurMode==='burn'||item.recurMode==='bill')?'<div class="rsub">'+(item.recurMode==='burn'?'Daily burn':'Bill on '+ordinal(item.billDay||1))+(item.paidUntil&&new Date(item.paidUntil)>new Date()?' &middot; <span style="color:#3a7d5a;font-weight:600">paid &#x2713;</span>':' &middot; today: '+fmt(calcRecurringValue(item)))+'</div>':'')
       +'</div>'
       +'<div class="rr">'
       +(isPot?'<span class="bdg bpot">pot</span>':sec==='expenses'?'<span class="bdg brec">rec</span>':'')
@@ -1071,7 +1109,7 @@ function inspHtml(it){
         +'<button class="insp-nav-btn" onclick="navInspector(1)" '+(hasNext?'':'disabled')+''+'>'+(nextIt?esc(nextIt.label):'')+' &#x2192;</button>'
         +'</div>'
       : '')
-    +(!isPot&&Q.inspSec==='expenses'?  '<div style="margin-top:10px;background:#f0ebe0;border-radius:8px;padding:10px 12px">'  +'<div style="font-size:11px;font-weight:500;color:#6e6558;margin-bottom:8px">Expense mode</div>'  +'<div style="display:flex;gap:6px">'  +['manual','burn','bill'].map(function(m){    var labels={manual:'Manual',burn:'Daily burn',bill:'Bill date'};    var on=(it.recurMode||'manual')===m;    return '<button onclick="setRecurMode(\''+it.id+'\',\''+m+'\')" style="flex:1;border:1px solid '+(on?'#c06040':'#e6e0d4')+';background:'+(on?'#c06040':'#fdfcf8')+';color:'+(on?'#fff':'#6e6558')+';border-radius:7px;padding:7px 4px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer">'+labels[m]+'</button>';  }).join('')  +'</div>'  +((it.recurMode==='bill')?    '<div style="margin-top:8px;display:flex;align-items:center;gap:8px">'    +'<span style="font-size:12px;color:#6e6558">Bill leaves on the</span>'    +'<input type="number" inputmode="decimal" min="1" max="31" value="'+(it.billDay||1)+'" style="width:50px;background:#fdfcf8;border:1px solid #c06040;border-radius:6px;padding:5px 7px;font-family:inherit;font-size:13px;text-align:center;outline:none" onchange="setBillDay(\''+it.id+'\',this.value)">'    +'<span style="font-size:12px;color:#6e6558">of each month</span>'    +'</div>'  :'')  +'<div style="font-size:11px;color:#a89f92;margin-top:8px">'  +((it.recurMode==='burn')?'Deduction reduces linearly from payday to zero.'   :(it.recurMode==='bill')?'Full amount deducted until bill date, then £0.'   :'Value is set manually in the edit field.')  +'</div>'  +'</div>':'')
+    +(!isPot&&Q.inspSec==='expenses'?  '<div style="margin-top:10px;background:#f0ebe0;border-radius:8px;padding:10px 12px">'  +'<div style="font-size:11px;font-weight:500;color:#6e6558;margin-bottom:8px">Expense mode</div>'  +'<div style="display:flex;gap:6px">'  +['manual','burn','bill'].map(function(m){    var labels={manual:'Manual',burn:'Daily burn',bill:'Bill date'};    var on=(it.recurMode||'manual')===m;    return '<button onclick="setRecurMode(\''+it.id+'\',\''+m+'\')" style="flex:1;border:1px solid '+(on?'#c06040':'#e6e0d4')+';background:'+(on?'#c06040':'#fdfcf8')+';color:'+(on?'#fff':'#6e6558')+';border-radius:7px;padding:7px 4px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer">'+labels[m]+'</button>';  }).join('')  +'</div>'  +((it.recurMode==='bill')?    '<div style="margin-top:8px;display:flex;align-items:center;gap:8px">'    +'<span style="font-size:12px;color:#6e6558">Bill leaves on the</span>'    +'<input type="number" inputmode="decimal" min="1" max="31" value="'+(it.billDay||1)+'" style="width:50px;background:#fdfcf8;border:1px solid #c06040;border-radius:6px;padding:5px 7px;font-family:inherit;font-size:13px;text-align:center;outline:none" onchange="setBillDay(\''+it.id+'\',this.value)">'    +'<span style="font-size:12px;color:#6e6558">of each month</span>'    +'</div>'  :'')  +'<div style="font-size:11px;color:#a89f92;margin-top:8px">'  +((it.recurMode==='burn')?'Deduction reduces linearly from payday to zero.'   :(it.recurMode==='bill')?'Full amount deducted until bill date, then £0.'   :'Value is set manually in the edit field.')  +'</div>'  +((it.recurMode==='bill')?    '<div style="margin-top:10px;border-top:1px solid #e6e0d4;padding-top:10px">'    +(it.paidUntil&&new Date(it.paidUntil)>new Date()?      '<div style="display:flex;align-items:center;justify-content:space-between">'      +'<div>'      +'<div style="font-size:12px;font-weight:600;color:#3a7d5a">&#x2713; Marked as paid</div>'      +'<div style="font-size:11px;color:#6e6558">Resets on '+new Date(it.paidUntil).toLocaleDateString('en-GB',{day:'numeric',month:'short'})+'</div>'      +'</div>'      +'<button onclick="clearPaid(\''+it.id+'\')" style="font-size:11px;color:#b83030;background:transparent;border:none;cursor:pointer;padding:4px 8px">Clear</button>'      +'</div>':      '<button onclick="markAsPaid(\''+it.id+'\')" style="width:100%;background:#e8f4ee;color:#3a7d5a;border:1px solid #b8dfc8;border-radius:8px;padding:10px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">'      +'&#x2713; Mark as paid early</button>'    )+'</div>'  :'')  +'</div>':'')
         +(Q.inspSec==='expenses'?'<button class="btog" onclick="toggleType(\''+it.id+'\')">Switch to '+(it.type==='pot'?'recurring':'pot')+'</button>':'')
     +'<button class="bdel" onclick="if(confirm(\'Delete this item?\'))deleteItem(\''+Q.inspSec+'\',\''+it.id+'\')">Delete this item</button>'
     +'<div style="height:14px"></div>'
@@ -1401,5 +1439,4 @@ function render(){
 
 render();
 </script>
-
 </body></html>
