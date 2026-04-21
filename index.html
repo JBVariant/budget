@@ -1,15 +1,16 @@
 <!DOCTYPE html>
+
 <html lang="en"><head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="4">
+<meta name="app-version" content="7">
 <script>
 // Version check: if cached version differs from this version, force reload
 (function(){
-  var VERSION = '4';
+  var VERSION = '7';
   var stored = localStorage.getItem('app_version');
   if(stored && stored !== VERSION){
     localStorage.setItem('app_version', VERSION);
@@ -44,12 +45,11 @@ html,body{height:100%;overflow:hidden;}
 body{font-family:'DM Sans',system-ui,sans-serif;background:#f7f4ee;color:#1e1c18;max-width:430px;margin:0 auto;font-size:14px;line-height:1.4;display:flex;flex-direction:column;}
 /* Layout */
 
-
 .main{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;}
-.tabbar{height:var(--tabh);background:#fdfcf8;border-top:1px solid #d4cdc0;display:flex;flex-shrink:0;}
+.tabbar{height:var(–tabh);background:#fdfcf8;border-top:1px solid #d4cdc0;display:flex;flex-shrink:0;}
 .tbb{flex:1;border:none;background:transparent;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer;font-family:inherit;color:#a89f92;font-size:9px;font-weight:500;padding-top:3px;letter-spacing:.03em;}
 .tbb.on{color:#c06040;}.tbb.on .tbb-icon{background:#f9ede8;border-radius:12px;}
-.savebar{height:var(--saveh);background:#fdfcf8;border-top:1px solid #e6e0d4;padding:0 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px;}
+.savebar{height:var(–saveh);background:#fdfcf8;border-top:1px solid #e6e0d4;padding:0 16px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px;}
 .savebtn{background:#c06040;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;}
 .savebtn:disabled{opacity:.35;cursor:default;}
 .dot{width:7px;height:7px;border-radius:50%;background:#e6aa00;display:inline-block;margin-right:5px;vertical-align:middle;}
@@ -167,7 +167,7 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:#f7f4ee;color:#1e1c18
 .target-inp{width:100%;background:#fdfcf8;border:1px solid #e6e0d4;border-radius:7px;padding:6px 8px;font-family:inherit;font-size:13px;color:#1e1c18;outline:none;-webkit-appearance:none;}
 .target-inp:focus{border-color:#c06040;}
 /* Undo toast */
-.undo-toast{position:fixed;bottom:calc(var(--tabh) + var(--saveh) + 10px);left:50%;transform:translateX(-50%);background:#1a1a18;color:#fff;border-radius:10px;padding:10px 14px;font-size:13px;display:flex;align-items:center;gap:12px;z-index:60;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.25);}
+.undo-toast{position:fixed;bottom:calc(var(–tabh) + var(–saveh) + 10px);left:50%;transform:translateX(-50%);background:#1a1a18;color:#fff;border-radius:10px;padding:10px 14px;font-size:13px;display:flex;align-items:center;gap:12px;z-index:60;white-space:nowrap;box-shadow:0 4px 20px rgba(0,0,0,.25);}
 .undo-btn{background:#fff8e6;color:#8a6200;border:1px solid #fde99a;border-radius:6px;padding:4px 10px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;}
 /* Quick update */
 .qu-screen{position:fixed;inset:0;background:#fdfcf8;z-index:70;display:flex;flex-direction:column;max-width:430px;margin:0 auto;}
@@ -225,10 +225,8 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:#f7f4ee;color:#1e1c18
 input[type=number]{-moz-appearance:textfield;}
 input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appearance:none;}
 </style>
+
 </head><body>
-
-
-
 
 <div class="main" id="main"></div>
 
@@ -246,6 +244,7 @@ input::-webkit-outer-spin-button,input::-webkit-inner-spin-button{-webkit-appear
 <div id="qu-container"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+
 <script>
 // ── Constants ─────────────────────────────────────────────────────────────────
 var SKEY = 'jake_bv7';
@@ -360,11 +359,21 @@ function persist(){ try{ localStorage.setItem(SKEY,JSON.stringify(S)); }catch(e)
 function totals(){
   var liq=S.accounts.reduce(function(a,x){return a+x.value;},0);
   var nonLiq=S.nonLiquid.reduce(function(a,x){var share=x.ownerShare!=null?x.ownerShare:1;return a+x.value*share;},0);
+  // rec = live deduction (bill-date/burn aware) — what's still to come this pay period
   var rec=S.expenses.filter(function(e){return e.type==='recurring';}).reduce(function(a,e){return a+calcRecurringValue(e);},0);
+  // recTotal = sum of all monthly amounts — true fixed monthly commitment
+  // For manual-mode expenses, use value as the monthly amount if monthly is unset/zero
+  var recTotal=S.expenses.filter(function(e){return e.type==='recurring';}).reduce(function(a,e){
+    var m=e.monthly||0;
+    if(m===0&&(e.recurMode==='manual'||!e.recurMode)) m=e.value||0;
+    return a+m;
+  },0);
   var pots=S.expenses.filter(function(e){return e.type==='pot';}).reduce(function(a,e){return a+e.value;},0);
   var disc=liq-rec-pots;
   var dob=rec>0?Math.round(disc/(rec/30)):999;
-  return {liq:liq,nonLiq:nonLiq,rec:rec,pots:pots,disc:disc,dob:dob};
+  // runway = how many months discretionary covers at full monthly rate
+  var runway=recTotal>0?Math.floor(disc/recTotal):null;
+  return {liq:liq,nonLiq:nonLiq,rec:rec,recTotal:recTotal,pots:pots,disc:disc,dob:dob,runway:runway};
 }
 function daysUntilPayday(){
   var today=new Date(), day=today.getDate(), pd=S.payday||25;
@@ -1248,8 +1257,9 @@ function render(){
       +'<div class="ov-payday-num">'+ordinal(pd)+'</div>'
       +'</div>'
       +'<div class="ov-payday">'
-      +'<div class="ov-payday-lbl">Recurring/mo</div>'
+      +'<div class="ov-payday-lbl">Still to come</div>'
       +'<div class="ov-payday-num" style="font-size:16px">'+fmtS(T.rec)+'</div>'
+      +'<div style="font-size:10px;color:rgba(255,255,255,0.55);margin-top:2px">'+(T.rec<T.recTotal?fmtS(T.recTotal)+'/mo total':'all bills pending')+'</div>'
       +'</div>'
       +'<div class="ov-actions">'
       +'<button class="ov-quickbtn" onclick="startQuickUpdate()">&#x26A1; Quick update</button>'
@@ -1292,14 +1302,14 @@ function render(){
           +'<span style="font-size:14px;font-weight:600" class="'+sc+'">'+fmt(stot)+'</span>'
           +'</div>';
       }).join('')
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:#e6e0d4">'
-      +[['Liquid',fmt(T.liq),''],['In pots',fmt(T.pots),'va']].map(function(x){
+      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1px;background:#c8d8ea">'
+      +[['Liquid',fmt(T.liq),''],['In pots',fmt(T.pots),'va'],
+        ['Runway',(T.runway!==null?(T.runway===0?'&lt;1 mo':T.runway+(T.runway===1?' month':' months')):'&infin;'),'']].map(function(x){
         return '<div style="background:#fdfcf8;padding:12px 14px">'
           +'<div style="font-size:11px;color:#6e6558;margin-bottom:3px">'+x[0]+'</div>'
-          +'<div style="font-size:15px;font-weight:600" class="'+x[2]+'">'+x[1]+'</div>'
+          +'<div style="font-size:14px;font-weight:600" class="'+x[2]+'">'+x[1]+'</div>'
           +'</div>';
       }).join('')
-      +'</div>';
   // ── Accounts ────────────────────────────────────────────────────────────────
   } else if(Q.tab==='accounts'){
     html=Object.entries(gbKey(S.accounts,'section')).map(function(e){return secHtml(e[0],e[1],'accounts','acc_'+e[0].replace(/\W/g,'_'));}).join('');
@@ -1439,4 +1449,5 @@ function render(){
 
 render();
 </script>
+
 </body></html>
