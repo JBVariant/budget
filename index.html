@@ -5,11 +5,11 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="9">
+<meta name="app-version" content="11">
 <script>
 // Version check: if cached version differs from this version, force reload
 (function(){
-  var VERSION = '9';
+  var VERSION = '11';
   var stored = localStorage.getItem('app_version');
   if(stored && stored !== VERSION){
     localStorage.setItem('app_version', VERSION);
@@ -350,7 +350,7 @@ var Q = {
   chartType:'line', histDate:'', histNW:'',
   undoStack:null, undoTmr:null,
   editPayday:false, pdVal:'',
-  quStep:-1, quVals:{}, showQuickEdit:false,
+  quStep:-1, quVals:{}, showQuickEdit:false, newSecId:null, newSecVal:'', renameSec:null, renameSecVal:'',
   sheetMsg:null, sheetMsgTmr:null, sheetSyncing:false
 };
 
@@ -473,7 +473,7 @@ function openI(id,sec){
   render();
   setTimeout(function(){ var el=document.getElementById('einp'); if(el){el.focus();el.select();} },80);
 }
-function closeI(){ Q.inspId=null; Q.inspSec=null; render(); }
+function closeI(){ Q.inspId=null; Q.inspSec=null; Q.newSecId=null; Q.renameSec=null; render(); }
 function navInspector(dir){
   // Save current edit value before moving
   var v=evalE(Q.editVal);
@@ -656,6 +656,24 @@ function savePotTarget(id){
     return u;
   });
   Q.dirty=true; persist(); haptic(); openI(id,'expenses');
+}
+function moveToSection(id,sec){
+  sec=sec.trim(); if(!sec) return;
+  S.accounts=S.accounts.map(function(a){return a.id===id?Object.assign({},a,{section:sec}):a;});
+  Q.dirty=true; persist(); openI(id,'accounts');
+}
+function renameSection(oldName,newName){
+  newName=(newName||'').trim(); if(!newName||newName===oldName) return;
+  S.accounts=S.accounts.map(function(a){return a.section===oldName?Object.assign({},a,{section:newName}):a;});
+  Q.dirty=true; persist(); render();
+}
+function promptNewSection(id){
+  Q.newSecId=id; Q.newSecVal=''; Q.renameSec=null; render();
+  setTimeout(function(){var el=document.getElementById('new-sec-inp');if(el){el.focus();}},60);
+}
+function promptRenameSection(oldName){
+  Q.renameSec=oldName; Q.renameSecVal=oldName; Q.newSecId=null; render();
+  setTimeout(function(){var el=document.getElementById('rename-sec-inp');if(el){el.focus();el.select();}},60);
 }
 function toggleC(key){ S.collapsed[key]=!S.collapsed[key]; persist(); render(); }
 
@@ -1101,7 +1119,40 @@ function inspHtml(it){
     +'<div class="srow" style="gap:8px">'+'<span class="slbl" style="flex-shrink:0">Name</span>'+'<input style="flex:1;background:#f0ebe0;border:1px solid #e6e0d4;border-radius:6px;padding:4px 8px;font-family:inherit;font-size:13px;color:#1e1c18;outline:none;text-align:right" value="'+esc(it.label)+'" oninput="renameItem(Q.inspSec,Q.inspId,this.value)">'+'</div>'+'<div class="srow"><span class="slbl">Current value</span><span class="sval '+vc(it.value)+'">'+fmt(it.value)+'</span></div>'+(Q.inspSec==='nonLiquid'?  '<div style="background:#f0ebe0;border-radius:8px;padding:10px 12px;margin:8px 0">'  +'<div style="font-size:11px;font-weight:500;color:#6e6558;margin-bottom:8px">Ownership share</div>'  +'<div style="display:flex;align-items:center;gap:8px">'  +'<div class="ewrap" style="border-color:#e6e0d4;background:#fdfcf8;flex:1">'  +'<input type="text" inputmode="decimal" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:16px;font-weight:500;color:#1e1c18;outline:none;min-width:0;width:100%" value="'+r2((it.ownerShare!=null?it.ownerShare:1)*100)+'" onchange="setOwnerShare(\'nonLiquid\',\''+it.id+'\',this.value)">'  +'</div>'  +'<span style="font-size:14px;font-weight:500;color:#6e6558">%</span>'  +'<span style="font-size:13px;color:#6e6558">= '+fmt(it.value*(it.ownerShare!=null?it.ownerShare:1))+' counted</span>'  +'</div>'  +(it.value<0?    '<div style="margin-top:10px;border-top:1px solid #e6e0d4;padding-top:10px">'    +'<div style="font-size:11px;font-weight:500;color:#6e6558;margin-bottom:8px">Mortgage details</div>'    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'    +'<div><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Annual rate (%)</div>'    +'<div class="ewrap" style="border-color:#e6e0d4;background:#fdfcf8">'    +'<input type="text" inputmode="decimal" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:14px;font-weight:500;color:#1e1c18;outline:none;min-width:0" placeholder="e.g. 4.5" value="'+(it.mortgageRate||'')+'" onchange="setMortgageDetails(\''+it.id+'\',\'mortgageRate\',this.value)">'    +'</div></div>'    +'<div><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Monthly payment (£)</div>'    +'<div class="ewrap" style="border-color:#e6e0d4;background:#fdfcf8">'    +'<input type="text" inputmode="decimal" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:14px;font-weight:500;color:#1e1c18;outline:none;min-width:0" placeholder="e.g. 853" value="'+(it.mortgagePayment||'')+'" onchange="setMortgageDetails(\''+it.id+'\',\'mortgagePayment\',this.value)">'    +'</div></div>'    +'<div style="grid-column:1/-1"><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Remaining term (months) '+(it.mortgageTermRefYear!=null?'<span style="color:#3a7d5a">&#x2713; auto-counting</span>':'')+'</div>'    +'<div style="display:flex;gap:8px;align-items:center">'    +'<div class="ewrap" style="border-color:#e6e0d4;background:#fdfcf8;flex:1">'    +'<input type="text" inputmode="decimal" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:14px;font-weight:500;color:#1e1c18;outline:none;min-width:0" placeholder="e.g. 240" value="'+(it.mortgageTerm||'')+'" onchange="setMortgageDetails(\''+it.id+'\',\'mortgageTerm\',this.value)">'    +'</div>'    +(it.mortgageTermRefYear!=null?'<span style="font-size:12px;color:#6e6558;white-space:nowrap">now: '+(effectiveMortgageTerm(it)||'?')+' mo</span>':'')    +'</div></div>'    +'</div>'    +(function(){ var m=calcMortgage(it); return m?        '<div style="margin-top:10px;background:#fdfcf8;border-radius:7px;padding:10px 12px;border:1px solid #e6e0d4">'        +'<div style="font-size:11px;font-weight:600;color:#6e6558;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Next payment breakdown</div>'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:13px;color:#6e6558">Interest</span><span style="font-size:13px;font-weight:600;color:#b83030">'+fmt(m.interest)+'</span></div>'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:13px;color:#6e6558">Principal</span><span style="font-size:13px;font-weight:600;color:#3a7d5a">'+fmt(m.principal)+'</span></div>'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:13px;color:#6e6558">Term remaining</span><span style="font-size:13px;font-weight:600">'+m.termMonths+' months</span></div>'        +'<div style="display:flex;justify-content:space-between;padding-top:6px;border-top:1px solid #e6e0d4">'        +'<span style="font-size:12px;color:#6e6558">Total interest remaining</span><span style="font-size:12px;font-weight:600">'+fmt(m.totalInterest)+'</span></div>'        +'</div>'      :'';})()    +'</div>'  :'')  +'</div>':'')
     +(it.monthly!=null?  ((isPot||(it.type==='recurring'&&(it.recurMode==='burn'||it.recurMode==='bill')))?    '<div class="set-block" style="padding:10px 0">'    +'<div style="font-size:11px;font-weight:500;color:#6e6558;margin-bottom:8px">'+(isPot?'Monthly top-up':'Monthly amount')+'</div>'    +'<div style="display:flex;gap:8px;align-items:flex-end">'    +'<div style="flex:1"><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Monthly</div>'    +'<div class="ewrap" style="border-color:#e6e0d4;background:#f0ebe0">'    +'<input type="text" inputmode="decimal" id="monthly-inp" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:14px;font-weight:500;color:#1e1c18;outline:none;min-width:0" value="'+r2(it.monthly)+'" oninput="syncAnnual(this.value)" onchange="saveMonthly(Q.inspSec,Q.inspId,this.value)">'    +'</div></div>'    +'<div style="color:#a89f92;font-size:12px;padding-bottom:8px">=</div>'    +'<div style="flex:1"><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Annual</div>'    +'<div class="ewrap" style="border-color:#e6e0d4;background:#f0ebe0">'    +'<input type="text" inputmode="decimal" id="annual-inp" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:14px;font-weight:500;color:#1e1c18;outline:none;min-width:0" value="'+r2(it.monthly*12)+'" oninput="syncMonthly(this.value)" onchange="saveAnnual(Q.inspSec,Q.inspId,this.value)">'    +'</div></div>'    +'</div></div>'  :    '<div class="srow"><span class="slbl">Monthly amount</span><span class="sval">'+fmt(it.monthly)+'</span></div>'  ):'')
     +potHtml
-    +(it.section?'<div class="srow"><span class="slbl">Group</span><span class="sval">'+esc(it.section)+'</span></div>':'')
+    +(Q.inspSec==='accounts'?
+      (function(){
+        var sections=[].concat.apply([],S.accounts.map(function(a){return a.section||'Other';})).filter(function(v,i,arr){return arr.indexOf(v)===i;});
+        var cur=it.section||'Other';
+        var chips=sections.map(function(s){
+          var on=s===cur;
+          return '<button onclick="moveToSection(\''+it.id+'\',\''+esc(s)+'\')" style="padding:5px 12px;border-radius:20px;font-family:inherit;font-size:12px;font-weight:'+(on?'600':'400')+';cursor:pointer;border:1px solid '+(on?'#c06040':'#e6e0d4')+';background:'+(on?'#f9ede8':'#f7f4ee')+';color:'+(on?'#c06040':'#6e6558')+'">'+esc(s)+'</button>';
+        }).join('');
+        var newSecHtml=Q.newSecId===it.id
+          ?'<div style="display:flex;gap:6px;margin-top:4px">'
+            +'<input id="new-sec-inp" type="text" value="'+esc(Q.newSecVal)+'" placeholder="Section name" oninput="Q.newSecVal=this.value" onkeydown="if(event.key===\'Enter\')moveToSection(\''+it.id+'\',Q.newSecVal);if(event.key===\'Escape\'){Q.newSecId=null;render();}" style="flex:1;background:#f7f4ee;border:1.5px solid #c06040;border-radius:7px;padding:6px 9px;font-family:inherit;font-size:13px;color:#1e1c18;outline:none">'
+            +'<button onclick="moveToSection(\''+it.id+'\',Q.newSecVal)" style="background:#c06040;color:#fff;border:none;border-radius:7px;padding:6px 12px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">Add</button>'
+            +'<button onclick="Q.newSecId=null;render()" style="background:#f0ebe0;color:#6e6558;border:none;border-radius:7px;padding:6px 10px;font-family:inherit;font-size:12px;cursor:pointer">Cancel</button>'
+            +'</div>'
+          :'';
+        var renameHtml=Q.renameSec===cur
+          ?'<div style="display:flex;gap:6px;margin-top:4px">'
+            +'<input id="rename-sec-inp" type="text" value="'+esc(Q.renameSecVal)+'" oninput="Q.renameSecVal=this.value" onkeydown="if(event.key===\'Enter\')renameSection(\''+esc(cur)+'\',Q.renameSecVal);if(event.key===\'Escape\'){Q.renameSec=null;render();}" style="flex:1;background:#f7f4ee;border:1.5px solid #c06040;border-radius:7px;padding:6px 9px;font-family:inherit;font-size:13px;color:#1e1c18;outline:none">'
+            +'<button onclick="renameSection(\''+esc(cur)+'\',Q.renameSecVal)" style="background:#c06040;color:#fff;border:none;border-radius:7px;padding:6px 12px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">Rename</button>'
+            +'<button onclick="Q.renameSec=null;render()" style="background:#f0ebe0;color:#6e6558;border:none;border-radius:7px;padding:6px 10px;font-family:inherit;font-size:12px;cursor:pointer">Cancel</button>'
+            +'</div>'
+          :'';
+        return '<div class="srow" style="flex-direction:column;align-items:stretch;gap:8px">'
+          +'<span class="slbl">Group</span>'
+          +'<div style="display:flex;gap:6px;flex-wrap:wrap">'+chips
+          +(Q.newSecId===it.id?'':'<button onclick="promptNewSection(\''+it.id+'\')" style="padding:5px 12px;border-radius:20px;font-family:inherit;font-size:12px;cursor:pointer;border:1px dashed #e6e0d4;background:transparent;color:#a89f92">+ New</button>')
+          +'</div>'
+          +newSecHtml
+          +(Q.renameSec===cur?'':('<button onclick="promptRenameSection(\''+esc(cur)+'\')" style="font-size:11px;color:#a89f92;background:transparent;border:none;cursor:pointer;text-align:left;padding:0">Rename &ldquo;'+esc(cur)+'&rdquo; section&hellip;</button>'))
+          +renameHtml
+          +'</div>';
+      }())
+    :it.section?'<div class="srow"><span class="slbl">Group</span><span class="sval">'+esc(it.section)+'</span></div>':'')
+
     +((!isPot&&Q.inspSec==='expenses'&&(it.recurMode==='burn'||it.recurMode==='bill'))?'<p class="hint" style="color:#a89f92">Value is calculated automatically from monthly amount &mdash; no manual edit needed</p>':'<p class="hint">Update value &mdash; supports maths e.g. 1500 + 250</p>')
     +((!isPot&&Q.inspSec==='expenses'&&(it.recurMode==='burn'||it.recurMode==='bill'))?  '<div class="ewrap" style="opacity:.4;pointer-events:none">'  +'<input class="einp" id="einp" type="text" inputmode="decimal" value="'+esc(fmt(calcRecurringValue(it)))+'" readonly>'  +'</div>':  '<div class="ewrap">'  +'<button type="button" onclick="var i=document.getElementById(\'einp\');i.value=i.value.trim().startsWith(\'-\')?i.value.trim().slice(1):i.value.trim()===\'\'?\'-\':\'-\'+i.value.trim();Q.editVal=i.value;" style="font-size:24px;font-weight:300;color:#6e6558;background:transparent;border:none;padding:0 8px 2px 0;cursor:pointer;line-height:1;flex-shrink:0;user-select:none">&plusmn;</button>'  +'<input class="einp" id="einp" type="text" inputmode="decimal" value="'+esc(Q.editVal)+'" oninput="Q.editVal=this.value" onkeydown="if(event.key===\'Enter\')confirmEdit();if(event.key===\'Escape\')closeI();" placeholder="'+fmt(it.value)+'">'  +'</div>')
     +'<div class="btnrow">'
