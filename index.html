@@ -5,11 +5,11 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="14">
+<meta name="app-version" content="15">
 <script>
 // Version check: if cached version differs from this version, force reload
 (function(){
-  var VERSION = '14';
+  var VERSION = '15';
   var stored = localStorage.getItem('app_version');
   if(stored && stored !== VERSION){
     localStorage.setItem('app_version', VERSION);
@@ -312,15 +312,7 @@ var INIT = {
   snapshots: [],
   quickIds: [],
   deletedItems: [],
-  lastAccountUpdate: null,
-  household: {
-    enabled: false,
-    baselinePct: 50,
-    nameA: 'Me',
-    nameB: 'Partner',
-    overpaymentsA: [],
-    overpaymentsB: []
-  }
+  lastAccountUpdate: null
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -347,7 +339,6 @@ if(!S.gasUrl) S.gasUrl='';
 if(!S.quickIds||S.quickIds.length===0) S.quickIds=S.accounts.map(function(a){return a.id;});
 if(!S.deletedItems) S.deletedItems=[];
 if(S.lastAccountUpdate===undefined) S.lastAccountUpdate=null;
-if(!S.household) S.household={enabled:false,baselinePct:50,nameA:'Me',nameB:'Partner',overpaymentsA:[],overpaymentsB:[]};
 if(!S.gasSheetName) S.gasSheetName='Budget Snapshots';
 if(!S.gasSheetUrl) S.gasSheetUrl='';
 S.expenses.forEach(function(e){ if(e.type==='pot'&&e.targetMonths==null&&e.targetAmount==null) e.targetMonths=12; });
@@ -539,52 +530,100 @@ function renameItem(sec,id,label){
 function sumOverpayments(list){
   return (list||[]).reduce(function(a,o){return a+(o.amount||0);},0);
 }
+function getMortgageItem(){
+  return S.nonLiquid.find(function(x){return x.isMortgage&&x.splitEnabled;});
+}
 function householdShare(){
-  // Returns {shareA, shareB} as fractions (0-1) of property/mortgage owned by each
-  var h=S.household;
-  if(!h||!h.enabled) return null;
-  // Find property (positive nonLiquid flagged) and mortgage (negative)
+  // Refined model — reads all config from the flagged mortgage item.
+  // Returns {shareA, shareB} as fractions (0-1), or null if not configured.
+  var m=getMortgageItem();
+  if(!m) return null;
   var propItem=S.nonLiquid.find(function(x){return x.isProperty;});
-  var mortItem=S.nonLiquid.find(function(x){return x.isMortgage;});
   var propVal=propItem?propItem.value:0;
-  var mortVal=mortItem?Math.abs(mortItem.value):0;
-  var equity=propVal-mortVal;
-  var opA=sumOverpayments(h.overpaymentsA);
-  var opB=sumOverpayments(h.overpaymentsB);
+  var currentMort=Math.abs(m.value);
+  var initialMort=m.initialMortgage||0;
+  var opA=sumOverpayments(m.overpaymentsA);
+  var opB=sumOverpayments(m.overpaymentsB);
   var totalOp=opA+opB;
-  // normalEquity = equity built via deposits + regular payments (split at baseline)
-  var normalEquity=equity-totalOp;
-  if(normalEquity<0) normalEquity=0;
-  var baseA=(h.baselinePct/100);
+  var currentEquity=propVal-currentMort;
+  // Capital repaid through regular payments (excludes interest, excludes overpayments)
+  var capitalFromPayments=initialMort>0?(initialMort-currentMort-totalOp):0;
+  if(capitalFromPayments<0) capitalFromPayments=0;
+  // Deposit + appreciation = whatever equity isn't from payments or overpayments
+  var depositAndAppreciation=currentEquity-capitalFromPayments-totalOp;
+  // Shared equity (split at baseline): deposit + appreciation + regular-payment capital
+  var sharedEquity=depositAndAppreciation+capitalFromPayments;
+  if(sharedEquity<0) sharedEquity=0;
+  var baseA=((m.baselinePct!=null?m.baselinePct:50)/100);
   var baseB=1-baseA;
-  var stakeA=baseA*normalEquity+opA;
-  var stakeB=baseB*normalEquity+opB;
+  var stakeA=baseA*sharedEquity+opA;
+  var stakeB=baseB*sharedEquity+opB;
   var total=stakeA+stakeB;
   if(total<=0) return {shareA:baseA,shareB:baseB};
-  return {shareA:stakeA/total,shareB:stakeB/total};
+  return {shareA:stakeA/total,shareB:stakeB/total,
+    _debug:{currentEquity:currentEquity,capitalFromPayments:capitalFromPayments,depositAndAppreciation:depositAndAppreciation,opA:opA,opB:opB}};
 }
 function myPropertyShare(){
   // The share (0-1) that counts toward MY net worth
   var hs=householdShare();
   return hs?hs.shareA:1;
 }
-function addOverpayment(who,amount,note){
+function addOverpayment(mortId,who,amount,note){
   var amt=evalE(String(amount)); if(amt===null||amt<=0) return;
   var entry={amount:r2(amt),note:(note||'').trim(),date:new Date().toISOString()};
-  if(who==='A') S.household.overpaymentsA.push(entry);
-  else S.household.overpaymentsB.push(entry);
-  Q.dirty=true; persist(); render();
+  S.nonLiquid=S.nonLiquid.map(function(x){
+    if(x.id!==mortId) return x;
+    var u=Object.assign({},x);
+    u.overpaymentsA=(u.overpaymentsA||[]).slice();
+    u.overpaymentsB=(u.overpaymentsB||[]).slice();
+    if(who==='A') u.overpaymentsA.push(entry); else u.overpaymentsB.push(entry);
+    return u;
+  });
+  Q.dirty=true; persist(); openI(mortId,'nonLiquid');
 }
-function deleteOverpayment(who,idx){
-  var list=who==='A'?S.household.overpaymentsA:S.household.overpaymentsB;
-  list.splice(idx,1);
-  Q.dirty=true; persist(); render();
+function deleteOverpayment(mortId,who,idx){
+  S.nonLiquid=S.nonLiquid.map(function(x){
+    if(x.id!==mortId) return x;
+    var u=Object.assign({},x);
+    u.overpaymentsA=(u.overpaymentsA||[]).slice();
+    u.overpaymentsB=(u.overpaymentsB||[]).slice();
+    if(who==='A') u.overpaymentsA.splice(idx,1); else u.overpaymentsB.splice(idx,1);
+    return u;
+  });
+  Q.dirty=true; persist(); openI(mortId,'nonLiquid');
 }
-function setHousehold(field,val){
-  if(field==='baselinePct'){ var v=parseFloat(val); if(isNaN(v)||v<0||v>100) return; S.household.baselinePct=v; }
-  else if(field==='enabled'){ S.household.enabled=!!val; }
-  else S.household[field]=val;
-  Q.dirty=true; persist(); render();
+function setMortgageSplit(mortId,field,val){
+  S.nonLiquid=S.nonLiquid.map(function(x){
+    if(x.id!==mortId) return x;
+    var u=Object.assign({},x);
+    if(field==='baselinePct'){ var v=parseFloat(val); if(isNaN(v)||v<0||v>100) return u; u.baselinePct=v; }
+    else if(field==='initialMortgage'){ var iv=evalE(String(val)); if(iv===null) return u; u.initialMortgage=r2(Math.abs(iv)); }
+    else if(field==='splitEnabled'){ u.splitEnabled=!!val; if(u.splitEnabled) u.isMortgage=true; }
+    else u[field]=val;
+    return u;
+  });
+  Q.dirty=true; persist(); openI(mortId,'nonLiquid');
+}
+function opBlock(mortId,who,name,list,total){
+  var h='<div style="border-top:1px solid #e6e0d4;padding-top:8px;margin-top:8px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+  h+='<span style="font-size:12px;font-weight:600;color:#1e1c18">'+esc(name)+' overpayments</span>';
+  h+='<span style="font-size:13px;font-weight:600;color:#3a7d5a">'+fmt(total)+'</span>';
+  h+='</div>';
+  (list||[]).forEach(function(o,i){
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px;color:#6e6558">';
+    h+='<span>'+new Date(o.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})+(o.note?' &middot; '+esc(o.note):'')+'</span>';
+    h+='<span style="display:flex;gap:6px;align-items:center"><span style="font-weight:600">'+fmt(o.amount)+'</span>';
+    h+='<button onclick="deleteOverpayment(\''+mortId+'\',\''+who+'\','+i+')" style="color:#b83030;background:none;border:none;cursor:pointer;font-size:14px">&times;</button></span>';
+    h+='</div>';
+  });
+  var amtId='op-'+who+'-amt-'+mortId, noteId='op-'+who+'-note-'+mortId;
+  h+='<div style="display:flex;gap:6px;margin-top:6px">';
+  h+='<input id="'+amtId+'" placeholder="£" inputmode="decimal" style="flex:0 0 70px;background:#fdfcf8;border:1px solid #e6e0d4;border-radius:6px;padding:6px 8px;font-family:inherit;font-size:13px;outline:none">';
+  h+='<input id="'+noteId+'" placeholder="Note" style="flex:1;background:#fdfcf8;border:1px solid #e6e0d4;border-radius:6px;padding:6px 8px;font-family:inherit;font-size:13px;outline:none">';
+  h+='<button onclick="addOverpayment(\''+mortId+'\',\''+who+'\',document.getElementById(\''+amtId+'\').value,document.getElementById(\''+noteId+'\').value)" style="background:#c06040;color:#fff;border:none;border-radius:6px;padding:0 12px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">Add</button>';
+  h+='</div></div>';
+  return h;
 }
 function markAsProperty(id){
   S.nonLiquid=S.nonLiquid.map(function(x){return Object.assign({},x,{isProperty:x.id===id?!x.isProperty:x.isProperty});});
@@ -1194,7 +1233,7 @@ function inspHtml(it){
   return '<div class="shandle"></div>'
     +'<div class="stitle">'+esc(it.label)+'<button class="sclose" onclick="closeI()">&#x2715;</button></div>'
     +'<div class="sbody">'
-    +'<div class="srow" style="gap:8px">'+'<span class="slbl" style="flex-shrink:0">Name</span>'+'<input style="flex:1;background:#f0ebe0;border:1px solid #e6e0d4;border-radius:6px;padding:4px 8px;font-family:inherit;font-size:13px;color:#1e1c18;outline:none;text-align:right" value="'+esc(it.label)+'" oninput="renameItem(Q.inspSec,Q.inspId,this.value)">'+'</div>'+'<div class="srow"><span class="slbl">Current value</span><span class="sval '+vc(it.value)+'">'+fmt(it.value)+'</span></div>'+(Q.inspSec==='nonLiquid'?  '<div style="background:#f0ebe0;border-radius:8px;padding:10px 12px;margin:8px 0">'  +'<div style="font-size:11px;font-weight:500;color:#6e6558;margin-bottom:8px">Property &amp; mortgage flags</div>'  +'<div style="display:flex;gap:6px">'  +'<button onclick="markAsProperty(\''+it.id+'\')" style="flex:1;padding:6px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;border:1px solid '+(it.isProperty?"#c06040":"#e6e0d4")+';background:'+(it.isProperty?"#f9ede8":"#fdfcf8")+';color:'+(it.isProperty?"#c06040":"#6e6558")+'">'+(it.isProperty?'&#x2713; ':'')+'Property</button>'  +'<button onclick="markAsMortgage(\''+it.id+'\')" style="flex:1;padding:6px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;border:1px solid '+(it.isMortgage?"#c06040":"#e6e0d4")+';background:'+(it.isMortgage?"#f9ede8":"#fdfcf8")+';color:'+(it.isMortgage?"#c06040":"#6e6558")+'">'+(it.isMortgage?'&#x2713; ':'')+'Mortgage</button>'  +'</div>'  +((S.household&&S.household.enabled&&(it.isProperty||it.isMortgage))?(function(){var hs=householdShare();return hs?'<div style="margin-top:8px;background:#eef4fc;border:1px solid #b8cce8;border-radius:7px;padding:8px 10px;font-size:12px;color:#3d6494">Household split: <strong>'+Math.round(hs.shareA*100)+'%</strong> '+esc(S.household.nameA)+' / '+Math.round(hs.shareB*100)+'% '+esc(S.household.nameB)+'</div>':'';}()):'')  +'</div>'  +'<div style="background:#f0ebe0;border-radius:8px;padding:10px 12px;margin:8px 0">'  +'<div style="font-size:11px;font-weight:500;color:#6e6558;margin-bottom:8px">Ownership share'+((S.household&&S.household.enabled&&(it.isProperty||it.isMortgage))?' (overridden by household split)':'')+'</div>'  +'<div style="display:flex;align-items:center;gap:8px">'  +'<div class="ewrap" style="border-color:#e6e0d4;background:#fdfcf8;flex:1">'  +'<input type="text" inputmode="decimal" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:16px;font-weight:500;color:#1e1c18;outline:none;min-width:0;width:100%" value="'+r2((it.ownerShare!=null?it.ownerShare:1)*100)+'" onchange="setOwnerShare(\'nonLiquid\',\''+it.id+'\',this.value)">'  +'</div>'  +'<span style="font-size:14px;font-weight:500;color:#6e6558">%</span>'  +'<span style="font-size:13px;color:#6e6558">= '+fmt(it.value*(it.ownerShare!=null?it.ownerShare:1))+' counted</span>'  +'</div>'  +(it.value<0?    '<div style="margin-top:10px;border-top:1px solid #e6e0d4;padding-top:10px">'    +'<div style="font-size:11px;font-weight:500;color:#6e6558;margin-bottom:8px">Mortgage details</div>'    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'    +'<div><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Annual rate (%)</div>'    +'<div class="ewrap" style="border-color:#e6e0d4;background:#fdfcf8">'    +'<input type="text" inputmode="decimal" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:14px;font-weight:500;color:#1e1c18;outline:none;min-width:0" placeholder="e.g. 4.5" value="'+(it.mortgageRate||'')+'" onchange="setMortgageDetails(\''+it.id+'\',\'mortgageRate\',this.value)">'    +'</div></div>'    +'<div><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Monthly payment (£)</div>'    +'<div class="ewrap" style="border-color:#e6e0d4;background:#fdfcf8">'    +'<input type="text" inputmode="decimal" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:14px;font-weight:500;color:#1e1c18;outline:none;min-width:0" placeholder="e.g. 853" value="'+(it.mortgagePayment||'')+'" onchange="setMortgageDetails(\''+it.id+'\',\'mortgagePayment\',this.value)">'    +'</div></div>'    +'<div style="grid-column:1/-1"><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Remaining term (months) '+(it.mortgageTermRefYear!=null?'<span style="color:#3a7d5a">&#x2713; auto-counting</span>':'')+'</div>'    +'<div style="display:flex;gap:8px;align-items:center">'    +'<div class="ewrap" style="border-color:#e6e0d4;background:#fdfcf8;flex:1">'    +'<input type="text" inputmode="decimal" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:14px;font-weight:500;color:#1e1c18;outline:none;min-width:0" placeholder="e.g. 240" value="'+(it.mortgageTerm||'')+'" onchange="setMortgageDetails(\''+it.id+'\',\'mortgageTerm\',this.value)">'    +'</div>'    +(it.mortgageTermRefYear!=null?'<span style="font-size:12px;color:#6e6558;white-space:nowrap">now: '+(effectiveMortgageTerm(it)||'?')+' mo</span>':'')    +'</div></div>'    +'</div>'    +(function(){ var m=calcMortgage(it); return m?        '<div style="margin-top:10px;background:#fdfcf8;border-radius:7px;padding:10px 12px;border:1px solid #e6e0d4">'        +'<div style="font-size:11px;font-weight:600;color:#6e6558;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Next payment breakdown</div>'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:13px;color:#6e6558">Interest</span><span style="font-size:13px;font-weight:600;color:#b83030">'+fmt(m.interest)+'</span></div>'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:13px;color:#6e6558">Principal</span><span style="font-size:13px;font-weight:600;color:#3a7d5a">'+fmt(m.principal)+'</span></div>'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:13px;color:#6e6558">Term remaining</span><span style="font-size:13px;font-weight:600">'+m.termMonths+' months</span></div>'        +'<div style="display:flex;justify-content:space-between;padding-top:6px;border-top:1px solid #e6e0d4">'        +'<span style="font-size:12px;color:#6e6558">Total interest remaining</span><span style="font-size:12px;font-weight:600">'+fmt(m.totalInterest)+'</span></div>'        +'</div>'      :'';})()    +'</div>'  :'')  +'</div>':'')
+    +'<div class="srow" style="gap:8px">'+'<span class="slbl" style="flex-shrink:0">Name</span>'+'<input style="flex:1;background:#f0ebe0;border:1px solid #e6e0d4;border-radius:6px;padding:4px 8px;font-family:inherit;font-size:13px;color:#1e1c18;outline:none;text-align:right" value="'+esc(it.label)+'" oninput="renameItem(Q.inspSec,Q.inspId,this.value)">'+'</div>'+'<div class="srow"><span class="slbl">Current value</span><span class="sval '+vc(it.value)+'">'+fmt(it.value)+'</span></div>'+(Q.inspSec==='nonLiquid'?  '<div style="background:#f0ebe0;border-radius:8px;padding:10px 12px;margin:8px 0">'  +'<div style="font-size:11px;font-weight:500;color:#6e6558;margin-bottom:8px">Property &amp; mortgage flags</div>'  +'<div style="display:flex;gap:6px">'  +'<button onclick="markAsProperty(\''+it.id+'\')" style="flex:1;padding:6px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;border:1px solid '+(it.isProperty?"#c06040":"#e6e0d4")+';background:'+(it.isProperty?"#f9ede8":"#fdfcf8")+';color:'+(it.isProperty?"#c06040":"#6e6558")+'">'+(it.isProperty?'&#x2713; ':'')+'Property</button>'  +'<button onclick="markAsMortgage(\''+it.id+'\')" style="flex:1;padding:6px;border-radius:7px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;border:1px solid '+(it.isMortgage?"#c06040":"#e6e0d4")+';background:'+(it.isMortgage?"#f9ede8":"#fdfcf8")+';color:'+(it.isMortgage?"#c06040":"#6e6558")+'">'+(it.isMortgage?'&#x2713; ':'')+'Mortgage</button>'  +'</div>'  +'</div>'  +(it.isMortgage?(function(){    var m=it;    var splitOn=!!m.splitEnabled;    var opA=sumOverpayments(m.overpaymentsA);    var opB=sumOverpayments(m.overpaymentsB);    var nameA=m.nameA||'Me';var nameB=m.nameB||'Partner';    var h2='<div style="background:#f0ebe0;border-radius:8px;padding:10px 12px;margin:8px 0">';    h2+='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:'+(splitOn?'10px':'0')+'">';    h2+='<span style="font-size:11px;font-weight:500;color:#6e6558">Shared ownership split</span>';    h2+='<button onclick="setMortgageSplit(\''+m.id+'\',\'splitEnabled\','+(splitOn?'false':'true')+')" style="padding:5px 12px;border-radius:20px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;border:1px solid '+(splitOn?'#3a7d5a':'#e6e0d4')+';background:'+(splitOn?'#e8f4ee':'#fdfcf8')+';color:'+(splitOn?'#3a7d5a':'#6e6558')+'">'+(splitOn?'On':'Off')+'</button>';    h2+='</div>';    if(splitOn){      var hs=householdShare();      h2+='<div style="display:flex;gap:8px;margin-bottom:8px">';      h2+='<div style="flex:1"><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Your name</div><input value="'+esc(nameA)+'" onchange="setMortgageSplit(\''+m.id+'\',\'nameA\',this.value)" style="width:100%;background:#fdfcf8;border:1px solid #e6e0d4;border-radius:6px;padding:6px 8px;font-family:inherit;font-size:13px;outline:none"></div>';      h2+='<div style="flex:1"><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Partner name</div><input value="'+esc(nameB)+'" onchange="setMortgageSplit(\''+m.id+'\',\'nameB\',this.value)" style="width:100%;background:#fdfcf8;border:1px solid #e6e0d4;border-radius:6px;padding:6px 8px;font-family:inherit;font-size:13px;outline:none"></div>';      h2+='</div>';      h2+='<div style="display:flex;gap:8px;margin-bottom:8px">';      h2+='<div style="flex:1"><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Initial mortgage (£)</div><input type="text" inputmode="decimal" placeholder="e.g. 380000" value="'+(m.initialMortgage||'')+'" onchange="setMortgageSplit(\''+m.id+'\',\'initialMortgage\',this.value)" style="width:100%;background:#fdfcf8;border:1px solid #e6e0d4;border-radius:6px;padding:6px 8px;font-family:inherit;font-size:13px;outline:none"></div>';      h2+='<div style="flex:1"><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Baseline your %</div><input type="text" inputmode="decimal" value="'+(m.baselinePct!=null?m.baselinePct:50)+'" onchange="setMortgageSplit(\''+m.id+'\',\'baselinePct\',this.value)" style="width:100%;background:#fdfcf8;border:1px solid #e6e0d4;border-radius:6px;padding:6px 8px;font-family:inherit;font-size:13px;outline:none"></div>';      h2+='</div>';      if(hs){h2+='<div style="background:#eef4fc;border:1px solid #b8cce8;border-radius:7px;padding:8px 10px;margin-bottom:8px"><div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:#3d6494"><span>'+esc(nameA)+': '+Math.round(hs.shareA*100)+'%</span><span>'+esc(nameB)+': '+Math.round(hs.shareB*100)+'%</span></div></div>';}      if(!m.initialMortgage){h2+='<div style="font-size:11px;color:#b83030;margin-bottom:8px">Enter your initial mortgage to calculate the split accurately.</div>';}      h2+=opBlock(m.id,'A',nameA,m.overpaymentsA,opA);      h2+=opBlock(m.id,'B',nameB,m.overpaymentsB,opB);      h2+='<div style="font-size:11px;color:#a89f92;margin-top:6px">Also flag your property item as \'Property\' for the split to include appreciation.</div>';    }    h2+='</div>';    return h2;  }()):'')  +'<div style="background:#f0ebe0;border-radius:8px;padding:10px 12px;margin:8px 0">'  +'<div style="font-size:11px;font-weight:500;color:#6e6558;margin-bottom:8px">Ownership share'+((householdShare()&&(it.isProperty||it.isMortgage))?' (using shared split)':'')+'</div>'  +'<div style="display:flex;align-items:center;gap:8px">'  +'<div class="ewrap" style="border-color:#e6e0d4;background:#fdfcf8;flex:1">'  +'<input type="text" inputmode="decimal" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:16px;font-weight:500;color:#1e1c18;outline:none;min-width:0;width:100%" value="'+r2((it.ownerShare!=null?it.ownerShare:1)*100)+'" onchange="setOwnerShare(\'nonLiquid\',\''+it.id+'\',this.value)">'  +'</div>'  +'<span style="font-size:14px;font-weight:500;color:#6e6558">%</span>'  +'<span style="font-size:13px;color:#6e6558">= '+fmt(it.value*(it.ownerShare!=null?it.ownerShare:1))+' counted</span>'  +'</div>'  +(it.value<0?    '<div style="margin-top:10px;border-top:1px solid #e6e0d4;padding-top:10px">'    +'<div style="font-size:11px;font-weight:500;color:#6e6558;margin-bottom:8px">Mortgage details</div>'    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'    +'<div><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Annual rate (%)</div>'    +'<div class="ewrap" style="border-color:#e6e0d4;background:#fdfcf8">'    +'<input type="text" inputmode="decimal" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:14px;font-weight:500;color:#1e1c18;outline:none;min-width:0" placeholder="e.g. 4.5" value="'+(it.mortgageRate||'')+'" onchange="setMortgageDetails(\''+it.id+'\',\'mortgageRate\',this.value)">'    +'</div></div>'    +'<div><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Monthly payment (£)</div>'    +'<div class="ewrap" style="border-color:#e6e0d4;background:#fdfcf8">'    +'<input type="text" inputmode="decimal" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:14px;font-weight:500;color:#1e1c18;outline:none;min-width:0" placeholder="e.g. 853" value="'+(it.mortgagePayment||'')+'" onchange="setMortgageDetails(\''+it.id+'\',\'mortgagePayment\',this.value)">'    +'</div></div>'    +'<div style="grid-column:1/-1"><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Remaining term (months) '+(it.mortgageTermRefYear!=null?'<span style="color:#3a7d5a">&#x2713; auto-counting</span>':'')+'</div>'    +'<div style="display:flex;gap:8px;align-items:center">'    +'<div class="ewrap" style="border-color:#e6e0d4;background:#fdfcf8;flex:1">'    +'<input type="text" inputmode="decimal" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:14px;font-weight:500;color:#1e1c18;outline:none;min-width:0" placeholder="e.g. 240" value="'+(it.mortgageTerm||'')+'" onchange="setMortgageDetails(\''+it.id+'\',\'mortgageTerm\',this.value)">'    +'</div>'    +(it.mortgageTermRefYear!=null?'<span style="font-size:12px;color:#6e6558;white-space:nowrap">now: '+(effectiveMortgageTerm(it)||'?')+' mo</span>':'')    +'</div></div>'    +'</div>'    +(function(){ var m=calcMortgage(it); return m?        '<div style="margin-top:10px;background:#fdfcf8;border-radius:7px;padding:10px 12px;border:1px solid #e6e0d4">'        +'<div style="font-size:11px;font-weight:600;color:#6e6558;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Next payment breakdown</div>'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:13px;color:#6e6558">Interest</span><span style="font-size:13px;font-weight:600;color:#b83030">'+fmt(m.interest)+'</span></div>'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:13px;color:#6e6558">Principal</span><span style="font-size:13px;font-weight:600;color:#3a7d5a">'+fmt(m.principal)+'</span></div>'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:13px;color:#6e6558">Term remaining</span><span style="font-size:13px;font-weight:600">'+m.termMonths+' months</span></div>'        +'<div style="display:flex;justify-content:space-between;padding-top:6px;border-top:1px solid #e6e0d4">'        +'<span style="font-size:12px;color:#6e6558">Total interest remaining</span><span style="font-size:12px;font-weight:600">'+fmt(m.totalInterest)+'</span></div>'        +'</div>'      :'';})()    +'</div>'  :'')  +'</div>':'')
     +(it.monthly!=null?  ((isPot||(it.type==='recurring'&&(it.recurMode==='burn'||it.recurMode==='bill')))?    '<div class="set-block" style="padding:10px 0">'    +'<div style="font-size:11px;font-weight:500;color:#6e6558;margin-bottom:8px">'+(isPot?'Monthly top-up':'Monthly amount')+'</div>'    +'<div style="display:flex;gap:8px;align-items:flex-end">'    +'<div style="flex:1"><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Monthly</div>'    +'<div class="ewrap" style="border-color:#e6e0d4;background:#f0ebe0">'    +'<input type="text" inputmode="decimal" id="monthly-inp" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:14px;font-weight:500;color:#1e1c18;outline:none;min-width:0" value="'+r2(it.monthly)+'" oninput="syncAnnual(this.value)" onchange="saveMonthly(Q.inspSec,Q.inspId,this.value)">'    +'</div></div>'    +'<div style="color:#a89f92;font-size:12px;padding-bottom:8px">=</div>'    +'<div style="flex:1"><div style="font-size:11px;color:#a89f92;margin-bottom:3px">Annual</div>'    +'<div class="ewrap" style="border-color:#e6e0d4;background:#f0ebe0">'    +'<input type="text" inputmode="decimal" id="annual-inp" style="flex:1;background:transparent;border:none;font-family:inherit;font-size:14px;font-weight:500;color:#1e1c18;outline:none;min-width:0" value="'+r2(it.monthly*12)+'" oninput="syncMonthly(this.value)" onchange="saveAnnual(Q.inspSec,Q.inspId,this.value)">'    +'</div></div>'    +'</div></div>'  :    '<div class="srow"><span class="slbl">Monthly amount</span><span class="sval">'+fmt(it.monthly)+'</span></div>'  ):'')
     +potHtml
     +(Q.inspSec==='accounts'?
@@ -1535,82 +1574,6 @@ function render(){
           +'<a href="'+esc(S.gasSheetUrl)+'" target="_blank" style="font-size:12px;color:#3d6494;font-weight:600;text-decoration:none">Open &#x2192;</a>'
           +'</div>'
         : '')
-      +'<div class="set-section">Household split</div>'
-      +'<div class="set-block">'
-      +'<div style="display:flex;align-items:center;justify-content:space-between">'
-      +'<div><div class="set-lbl">Enable shared property split</div>'
-      +'<div class="set-sub">Splits property &amp; mortgage by contribution</div></div>'
-      +'<button onclick="setHousehold(\'enabled\','+(S.household.enabled?'false':'true')+')" style="padding:6px 14px;border-radius:20px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;border:1px solid '+(S.household.enabled?'#3a7d5a':'#e6e0d4')+';background:'+(S.household.enabled?'#e8f4ee':'#fdfcf8')+';color:'+(S.household.enabled?'#3a7d5a':'#6e6558')+'">'+(S.household.enabled?'On':'Off')+'</button>'
-      +'</div>'
-      +'</div>'
-      +(S.household.enabled?(function(){
-        var hs=householdShare();
-        var opA=sumOverpayments(S.household.overpaymentsA);
-        var opB=sumOverpayments(S.household.overpaymentsB);
-        var html2='';
-        // Names
-        html2+='<div class="set-block">'
-          +'<div style="display:flex;gap:8px">'
-          +'<div style="flex:1"><div class="set-sub">Your name</div>'
-          +'<input class="set-inp" value="'+esc(S.household.nameA)+'" onchange="setHousehold(\'nameA\',this.value)"></div>'
-          +'<div style="flex:1"><div class="set-sub">Partner name</div>'
-          +'<input class="set-inp" value="'+esc(S.household.nameB)+'" onchange="setHousehold(\'nameB\',this.value)"></div>'
-          +'</div></div>';
-        // Baseline %
-        html2+='<div class="set-block">'
-          +'<div class="set-sub">Baseline split (your %) &mdash; before overpayments</div>'
-          +'<div style="display:flex;align-items:center;gap:8px;margin-top:6px">'
-          +'<input class="set-inp" type="text" inputmode="decimal" style="width:80px;margin-top:0" value="'+S.household.baselinePct+'" onchange="setHousehold(\'baselinePct\',this.value)">'
-          +'<span style="font-size:13px;color:#6e6558">% you / '+(100-S.household.baselinePct)+'% '+esc(S.household.nameB)+'</span>'
-          +'</div></div>';
-        // Current split result
-        if(hs){
-          html2+='<div class="set-block" style="background:#eef4fc">'
-            +'<div style="font-size:11px;font-weight:600;color:#3d6494;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Current split</div>'
-            +'<div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;color:#3d6494">'
-            +'<span>'+esc(S.household.nameA)+': '+Math.round(hs.shareA*100)+'%</span>'
-            +'<span>'+esc(S.household.nameB)+': '+Math.round(hs.shareB*100)+'%</span>'
-            +'</div></div>';
-        }
-        // Overpayments A
-        html2+='<div class="set-block">'
-          +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-          +'<span class="set-lbl">'+esc(S.household.nameA)+'\'s overpayments</span>'
-          +'<span style="font-size:13px;font-weight:600;color:#3a7d5a">'+fmt(opA)+'</span>'
-          +'</div>'
-          +(S.household.overpaymentsA.map(function(o,i){
-            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;color:#6e6558">'
-              +'<span>'+new Date(o.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})+(o.note?' &middot; '+esc(o.note):'')+'</span>'
-              +'<span style="display:flex;gap:8px;align-items:center"><span style="font-weight:600">'+fmt(o.amount)+'</span>'
-              +'<button onclick="deleteOverpayment(\'A\','+i+')" style="color:#b83030;background:none;border:none;cursor:pointer;font-size:14px">&times;</button></span>'
-              +'</div>';
-          }).join(''))
-          +'<div style="display:flex;gap:6px;margin-top:8px">'
-          +'<input id="op-a-amt" class="set-inp" style="margin-top:0;flex:0 0 80px" placeholder="£" inputmode="decimal">'
-          +'<input id="op-a-note" class="set-inp" style="margin-top:0;flex:1" placeholder="Note (optional)">'
-          +'<button onclick="addOverpayment(\'A\',document.getElementById(\'op-a-amt\').value,document.getElementById(\'op-a-note\').value)" style="background:#c06040;color:#fff;border:none;border-radius:7px;padding:0 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">Add</button>'
-          +'</div></div>';
-        // Overpayments B
-        html2+='<div class="set-block">'
-          +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-          +'<span class="set-lbl">'+esc(S.household.nameB)+'\'s overpayments</span>'
-          +'<span style="font-size:13px;font-weight:600;color:#3a7d5a">'+fmt(opB)+'</span>'
-          +'</div>'
-          +(S.household.overpaymentsB.map(function(o,i){
-            return '<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;font-size:12px;color:#6e6558">'
-              +'<span>'+new Date(o.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})+(o.note?' &middot; '+esc(o.note):'')+'</span>'
-              +'<span style="display:flex;gap:8px;align-items:center"><span style="font-weight:600">'+fmt(o.amount)+'</span>'
-              +'<button onclick="deleteOverpayment(\'B\','+i+')" style="color:#b83030;background:none;border:none;cursor:pointer;font-size:14px">&times;</button></span>'
-              +'</div>';
-          }).join(''))
-          +'<div style="display:flex;gap:6px;margin-top:8px">'
-          +'<input id="op-b-amt" class="set-inp" style="margin-top:0;flex:0 0 80px" placeholder="£" inputmode="decimal">'
-          +'<input id="op-b-note" class="set-inp" style="margin-top:0;flex:1" placeholder="Note (optional)">'
-          +'<button onclick="addOverpayment(\'B\',document.getElementById(\'op-b-amt\').value,document.getElementById(\'op-b-note\').value)" style="background:#c06040;color:#fff;border:none;border-radius:7px;padding:0 14px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer">Add</button>'
-          +'</div></div>';
-        html2+='<div style="padding:10px 18px;font-size:11px;color:#a89f92">Flag which non-liquid items are your property and mortgage in their inspectors for the split to apply.</div>';
-        return html2;
-      }()):'')
       +'<div class="set-section">Sheet name</div>'
       +'<div class="set-block">'
       +'<div class="set-sub">Name used when the sheet is first created</div>'
