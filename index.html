@@ -8,14 +8,14 @@
 <meta name="app-version" content="15">
 <script>
 // Version check: if cached version differs from this version, force reload
+window.APP_VERSION = '15';
 (function(){
-  var VERSION = '15';
   var stored = localStorage.getItem('app_version');
-  if(stored && stored !== VERSION){
-    localStorage.setItem('app_version', VERSION);
+  if(stored && stored !== window.APP_VERSION){
+    localStorage.setItem('app_version', window.APP_VERSION);
     window.location.reload(true);
   } else {
-    localStorage.setItem('app_version', VERSION);
+    localStorage.setItem('app_version', window.APP_VERSION);
   }
 })();
 </script>
@@ -603,6 +603,19 @@ function setMortgageSplit(mortId,field,val){
     return u;
   });
   Q.dirty=true; persist(); openI(mortId,'nonLiquid');
+}
+function forceUpdate(){
+  // Bust the cache by re-fetching the page with a cache-busting query param
+  var url=window.location.href.split('?')[0].split('#')[0];
+  var bust=url+'?_cb='+Date.now();
+  // Try to clear caches API if available (service workers), then hard reload
+  if('caches' in window){
+    caches.keys().then(function(names){
+      return Promise.all(names.map(function(n){return caches.delete(n);}));
+    }).finally(function(){ window.location.replace(bust); });
+  } else {
+    window.location.replace(bust);
+  }
 }
 function opBlock(mortId,who,name,list,total){
   var h='<div style="border-top:1px solid #e6e0d4;padding-top:8px;margin-top:8px">';
@@ -1574,6 +1587,14 @@ function render(){
           +'<a href="'+esc(S.gasSheetUrl)+'" target="_blank" style="font-size:12px;color:#3d6494;font-weight:600;text-decoration:none">Open &#x2192;</a>'
           +'</div>'
         : '')
+      +'<div class="set-section">App</div>'
+      +'<div class="set-block">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between">'
+      +'<div><div class="set-lbl">Version '+APP_VERSION+'</div>'
+      +'<div class="set-sub">Force a fresh copy from the server</div></div>'
+      +'<button onclick="forceUpdate()" style="padding:8px 16px;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;border:none;background:#c06040;color:#fff">Check for updates</button>'
+      +'</div>'
+      +'</div>'
       +'<div class="set-section">Sheet name</div>'
       +'<div class="set-block">'
       +'<div class="set-sub">Name used when the sheet is first created</div>'
