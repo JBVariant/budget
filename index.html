@@ -5,10 +5,10 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="17">
+<meta name="app-version" content="18">
 <script>
 // Version check: if cached version differs from this version, force reload
-window.APP_VERSION = '17';
+window.APP_VERSION = '18';
 (function(){
   var stored = localStorage.getItem('app_version');
   if(stored && stored !== window.APP_VERSION){
@@ -646,6 +646,27 @@ function unmakeHomeItem(id){
     return u;
   });
   Q.dirty=true; persist(); openI(id,'nonLiquid');
+}
+function opBlock(mortId,who,name,list,total){
+  var h='<div style="border-top:1px solid #e6e0d4;padding-top:8px;margin-top:8px">';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">';
+  h+='<span style="font-size:12px;font-weight:600;color:#1e1c18">'+esc(name)+' overpayments</span>';
+  h+='<span style="font-size:13px;font-weight:600;color:#3a7d5a">'+fmt(total)+'</span>';
+  h+='</div>';
+  (list||[]).forEach(function(o,i){
+    h+='<div style="display:flex;justify-content:space-between;align-items:center;padding:3px 0;font-size:12px;color:#6e6558">';
+    h+='<span>'+new Date(o.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'2-digit'})+(o.note?' &middot; '+esc(o.note):'')+'</span>';
+    h+='<span style="display:flex;gap:6px;align-items:center"><span style="font-weight:600">'+fmt(o.amount)+'</span>';
+    h+='<button onclick="deleteOverpayment(\''+mortId+'\',\''+who+'\','+i+')" style="color:#b83030;background:none;border:none;cursor:pointer;font-size:14px">&times;</button></span>';
+    h+='</div>';
+  });
+  var amtId='op-'+who+'-amt-'+mortId, noteId='op-'+who+'-note-'+mortId;
+  h+='<div style="display:flex;gap:6px;margin-top:6px">';
+  h+='<input id="'+amtId+'" placeholder="£" inputmode="decimal" style="flex:0 0 70px;background:#fdfcf8;border:1px solid #e6e0d4;border-radius:6px;padding:6px 8px;font-family:inherit;font-size:13px;outline:none">';
+  h+='<input id="'+noteId+'" placeholder="Note" style="flex:1;background:#fdfcf8;border:1px solid #e6e0d4;border-radius:6px;padding:6px 8px;font-family:inherit;font-size:13px;outline:none">';
+  h+='<button onclick="addOverpayment(\''+mortId+'\',\''+who+'\',document.getElementById(\''+amtId+'\').value,document.getElementById(\''+noteId+'\').value)" style="background:#c06040;color:#fff;border:none;border-radius:6px;padding:0 12px;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer">Add</button>';
+  h+='</div></div>';
+  return h;
 }
 function homeInspectorHtml(m){
   var splitOn=m.splitEnabled!==false;
