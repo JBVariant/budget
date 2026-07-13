@@ -1569,7 +1569,7 @@ function render(){
         +'<div class="qu-edit-panel-title">Tap to toggle in quick update</div>'
         +S.accounts.map(function(a){
           var on=S.quickIds.indexOf(a.id)>-1;
-          return '<span class="qu-chip '+(on?'on':'')+'">'            +(on?'&#x2713; ':'')+esc(a.label)+'</span>';
+          return '<span class="qu-chip '+(on?'on':'')+'" onclick="toggleQuickId(\''+a.id+'\')">'            +(on?'&#x2713; ':'')+esc(a.label)+'</span>';
         }).join('')
         +'</div>'
       :'')
