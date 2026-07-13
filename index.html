@@ -5,41 +5,29 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="18">
+<meta name="app-version" content="20">
 <script>
 // Version check: if cached version differs from this version, force reload
-window.APP_VERSION = '18';
+window.APP_VERSION = '20';
 (function(){
   var stored = localStorage.getItem('app_version');
   if(stored && stored !== window.APP_VERSION){
     localStorage.setItem('app_version', window.APP_VERSION);
-    window.location.reload(true);
+    window.location.reload();
   } else {
     localStorage.setItem('app_version', window.APP_VERSION);
   }
 })();
 </script>
 <title>Budget</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-:root{
-  /* Cream body */
-  --bg:#f7f4ee;--bg2:#fdfcf8;--bg3:#f0ebe0;
-  --border:#e6e0d4;--border2:#d4cdc0;
-  --text:#1e1c18;--muted:#6e6558;--dim:#a89f92;
-  /* Dusty blue — hero */
-  --hero-bg:#5b7fa6;--hero-bg2:#4a6d92;--hero-text:#fff;--hero-muted:rgba(255,255,255,0.7);
-  /* Terracotta — accent */
-  --accent:#c06040;--accent-bg:#f9ede8;--accent-lt:#edc4b4;
-  /* Semantic colours — kept compatible */
-  --green:#3a7d5a;--green-bg:#e8f4ee;--green-lt:#b8dfc8;
-  --amber:#8a6200;--amber-bg:#fff8e6;--amber-lt:#fde99a;
-  --red:#b83030;--red-bg:#fdf0f0;--red-lt:#f8c8c8;
-  --blue:#3d6494;--blue-bg:#edf2f9;--blue-lt:#b8cce8;
-  --tabh:56px;--saveh:48px;
-  --border-blue:#c8d8ea;
-}
+:root{ --tabh:56px; --saveh:48px; }
+/* Palette (hardcoded for iOS PWA reliability):
+   cream #f7f4ee / #fdfcf8 / #f0ebe0 · text #1e1c18 · muted #6e6558 · dim #a89f92
+   hero blue #5b7fa6 · accent terracotta #c06040 · borders #e6e0d4 / #c8d8ea
+   green #3a7d5a · amber #8a6200 · red #b83030 · blue #3d6494 */
 html,body{height:100%;overflow:hidden;}
 body{font-family:'DM Sans',system-ui,sans-serif;background:#f7f4ee;color:#1e1c18;max-width:430px;margin:0 auto;font-size:14px;line-height:1.4;display:flex;flex-direction:column;}
 /* Layout */
@@ -55,24 +43,23 @@ body{font-family:'DM Sans',system-ui,sans-serif;background:#f7f4ee;color:#1e1c18
 .dot{width:7px;height:7px;border-radius:50%;background:#e6aa00;display:inline-block;margin-right:5px;vertical-align:middle;}
 /* Overview */
 /* Overview hero — dusty blue */
-.ov-hero{background:#5b7fa6;background:#5b7fa6;padding:28px 20px 24px;position:relative;overflow:hidden;}
+.ov-hero{background:#5b7fa6;padding:28px 20px 24px;position:relative;overflow:hidden;}
 
-.ov-disc-label{font-size:11px;font-weight:500;color:rgba(255,255,255,0.7);color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;}
-.ov-disc-num{font-size:48px;font-weight:600;letter-spacing:-2px;line-height:1;color:#fff;color:#ffffff;}
-.ov-disc-num.neg{color:#ffb3a0 !important;}
-.ov-per-day{font-size:13px;color:rgba(255,255,255,0.7);color:rgba(255,255,255,0.7);margin-top:6px;}
+.ov-disc-label{font-size:11px;font-weight:500;color:rgba(255,255,255,0.7);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px;}
+.ov-disc-num{font-size:48px;font-weight:600;letter-spacing:-2px;line-height:1;color:#ffffff;}
+.ov-disc-num.neg{color:#ffb3a0;}
+.ov-per-day{font-size:13px;color:rgba(255,255,255,0.7);margin-top:6px;}
 .ov-per-day strong{color:#ffffff;font-weight:600;}
 .ov-meta{display:flex;align-items:stretch;gap:10px;margin-top:20px;}
 .ov-payday{display:flex;flex-direction:column;gap:2px;cursor:pointer;padding:10px 14px;background:rgba(255,255,255,0.14);border-radius:10px;border:1px solid rgba(255,255,255,0.2);flex:1;}
 .ov-payday:active{background:rgba(255,255,255,0.22);}
-.ov-payday-num{font-size:22px;font-weight:600;color:#fff;color:#ffffff;line-height:1;}
-.ov-payday-lbl{font-size:11px;color:rgba(255,255,255,0.7);color:rgba(255,255,255,0.7);line-height:1.4;}
+.ov-payday-num{font-size:22px;font-weight:600;color:#ffffff;line-height:1;}
+.ov-payday-lbl{font-size:11px;color:rgba(255,255,255,0.7);line-height:1.4;}
 /* Pay period progress */
 .ov-progress-wrap{margin-top:16px;}
-.ov-progress-label{display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,0.7);color:rgba(255,255,255,0.7);margin-bottom:5px;}
+.ov-progress-label{display:flex;justify-content:space-between;font-size:11px;color:rgba(255,255,255,0.7);margin-bottom:5px;}
 .ov-progress-track{height:6px;background:rgba(255,255,255,0.2);border-radius:3px;overflow:hidden;}
 .ov-progress-bar{height:100%;border-radius:3px;background:rgba(255,255,255,0.85);transition:width .3s;}
-.ov-progress-runway{position:absolute;height:100%;background:rgba(255,200,120,0.5);border-radius:3px;}
 /* Quick update button area */
 .ov-actions{display:flex;flex-direction:column;justify-content:center;gap:6px;}
 .ov-quickbtn{margin-left:auto;background:#c06040;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;}
@@ -272,8 +259,7 @@ var INIT = {
     {id:'owed1',label:'Money Owed',value:0,section:'Owed'}
   ],
   nonLiquid: [
-    {id:'mortgage',label:'Mortgage',value:0},
-    {id:'property',label:'Property Value',value:0},
+    {id:'home',label:'Home',value:0,isHome:true,splitEnabled:false,propertyValue:0,mortgageValue:0},
     {id:'pension1',label:'Pension 1',value:0},
     {id:'pension2',label:'Pension 2',value:0},
     {id:'pension3',label:'Pension 3',value:0},
@@ -344,7 +330,7 @@ if(!S.gasSheetUrl) S.gasSheetUrl='';
 S.expenses.forEach(function(e){ if(e.type==='pot'&&e.targetMonths==null&&e.targetAmount==null) e.targetMonths=12; });
 
 var Q = {
-  tab:'overview', srch:'', inspId:null, inspSec:null, editVal:'',
+  tab:'overview', inspId:null, inspSec:null, editVal:'',
   dirty:false, saveMsg:'', saveTmr:null,
   addTo:null, addLbl:'', addAmt:'', addSection:null,
   chartType:'line', histDate:'', histNW:'',
@@ -381,10 +367,9 @@ function totals(){
   },0);
   var pots=S.expenses.filter(function(e){return e.type==='pot';}).reduce(function(a,e){return a+e.value;},0);
   var disc=liq-rec-pots;
-  var dob=rec>0?Math.round(disc/(rec/30)):999;
   // runway = how many months discretionary covers at full monthly rate
   var runway=recTotal>0?Math.floor(disc/recTotal):null;
-  return {liq:liq,nonLiq:nonLiq,rec:rec,recTotal:recTotal,pots:pots,disc:disc,dob:dob,runway:runway};
+  return {liq:liq,nonLiq:nonLiq,rec:rec,recTotal:recTotal,pots:pots,disc:disc,runway:runway};
 }
 function daysUntilPayday(){
   var today=new Date(), day=today.getDate(), pd=S.payday||25;
@@ -564,18 +549,16 @@ function homeEquityShare(item){
   var stakeTotal=stakeA+stakeB;
   if(stakeTotal<=0) return {shareA:baseA,shareB:baseB,valueA:baseA*netEquity,valueB:baseB*netEquity,appreciation:appreciation,netEquity:netEquity};
   var shareA=stakeA/stakeTotal, shareB=stakeB/stakeTotal;
+  // Manual override: if set, use it directly and split net equity by it
+  if(m.overrideSharePct!=null&&m.overrideSharePct!==''){
+    shareA=m.overrideSharePct/100; shareB=1-shareA;
+    return {shareA:shareA,shareB:shareB,valueA:shareA*netEquity,valueB:shareB*netEquity,
+      appreciation:appreciation,netEquity:netEquity,overridden:true};
+  }
   var valueA=stakeA+shareA*appreciation;
   var valueB=stakeB+shareB*appreciation;
   return {shareA:shareA,shareB:shareB,valueA:valueA,valueB:valueB,appreciation:appreciation,netEquity:netEquity,
     _debug:{deposits:deposits,capitalFromPayments:capitalFromPayments,opA:opA,opB:opB}};
-}
-// Legacy compatibility shims
-function getMortgageItem(){ return getHomeItem(); }
-function householdShare(){ return homeEquityShare(); }
-function myPropertyShare(){
-  // The share (0-1) that counts toward MY net worth
-  var hs=householdShare();
-  return hs?hs.shareA:1;
 }
 function addOverpayment(mortId,who,amount,note){
   var amt=evalE(String(amount)); if(amt===null||amt<=0) return;
@@ -613,6 +596,9 @@ function setHomeField(id,field,val){
       var p=parseFloat(val); if(isNaN(p)||p<0||p>100) return u; u.baselinePct=p;
     } else if(field==='splitEnabled'){
       u.splitEnabled=!!val;
+    } else if(field==='overrideSharePct'){
+      if(val===''||val==null){ u.overrideSharePct=null; }
+      else { var ov=parseFloat(val); if(isNaN(ov)||ov<0||ov>100) return u; u.overrideSharePct=ov; }
     } else u[field]=val;
     // Keep .value in sync = my equity stake (for display/snapshots)
     var hes=homeEquityShare(u);
@@ -646,6 +632,19 @@ function unmakeHomeItem(id){
     return u;
   });
   Q.dirty=true; persist(); openI(id,'nonLiquid');
+}
+function forceUpdate(){
+  var url=window.location.href.split('?')[0].split('#')[0];
+  var bust=url+'?_cb='+Date.now();
+  try{
+    if('caches' in window){
+      caches.keys().then(function(names){
+        return Promise.all(names.map(function(n){return caches.delete(n);}));
+      }).then(function(){ window.location.replace(bust); }).catch(function(){ window.location.replace(bust); });
+      return;
+    }
+  }catch(e){}
+  window.location.replace(bust);
 }
 function opBlock(mortId,who,name,list,total){
   var h='<div style="border-top:1px solid #e6e0d4;padding-top:8px;margin-top:8px">';
@@ -693,20 +692,34 @@ function homeInspectorHtml(m){
   h+='<button onclick="setHomeField(\''+m.id+'\',\'splitEnabled\','+(splitOn?'false':'true')+')" style="padding:5px 12px;border-radius:20px;font-family:inherit;font-size:11px;font-weight:600;cursor:pointer;border:1px solid '+(splitOn?'#3a7d5a':'#e6e0d4')+';background:'+(splitOn?'#e8f4ee':'#fdfcf8')+';color:'+(splitOn?'#3a7d5a':'#6e6558')+'">'+(splitOn?'On':'Off')+'</button>';
   h+='</div>';
   if(splitOn){
-    h+='<div style="display:flex;gap:8px;margin-bottom:8px">'+inp('Your name','nameA',esc(nameA))+inp('Partner name','nameB',esc(nameB))+'</div>';
-    h+='<div style="display:flex;gap:8px;margin-bottom:8px">'+inp('Initial mortgage (£)','initialMortgage',m.initialMortgage||'','e.g. 370000')+inp('Baseline your %','baselinePct',m.baselinePct!=null?m.baselinePct:50)+'</div>';
-    h+='<div style="margin-bottom:8px">'+inp('Initial property value (£) — blank if unchanged','initialPropertyValue',m.initialPropertyValue||'','e.g. 420000')+'</div>';
+    // Manual override toggle
+    var hasOverride=m.overrideSharePct!=null&&m.overrideSharePct!=='';
+    h+='<div style="background:#eef4fc;border:1px solid #b8cce8;border-radius:7px;padding:10px;margin-bottom:10px">';
+    h+='<div style="font-size:11px;font-weight:600;color:#3d6494;margin-bottom:6px">Manual split override</div>';
+    h+='<div style="font-size:11px;color:#6e6558;margin-bottom:8px">Set your % directly (e.g. worked out in a spreadsheet). Overrides the calculation below.</div>';
+    h+='<div style="display:flex;align-items:center;gap:8px">';
+    h+='<input type="text" inputmode="decimal" placeholder="e.g. 55" value="'+(hasOverride?m.overrideSharePct:'')+'" onchange="setHomeField(\''+m.id+'\',\'overrideSharePct\',this.value)" style="flex:0 0 90px;background:#fdfcf8;border:1px solid #b8cce8;border-radius:6px;padding:7px 9px;font-family:inherit;font-size:14px;color:#1e1c18;outline:none">';
+    h+='<span style="font-size:13px;color:#6e6558">% you'+(hasOverride?' &middot; '+esc(nameB)+' '+(100-m.overrideSharePct)+'%':'')+'</span>';
+    if(hasOverride)h+='<button onclick="setHomeField(\''+m.id+'\',\'overrideSharePct\',\'\')" style="margin-left:auto;font-size:11px;color:#b83030;background:none;border:none;cursor:pointer">Clear</button>';
+    h+='</div>';
+    h+='</div>';
+    if(hasOverride){
+      h+='<div style="font-size:11px;color:#a89f92;margin-bottom:10px;padding:0 2px">Using manual override. The fields below are ignored while an override is set.</div>';
+    }
+    h+='<div style="display:flex;gap:8px;margin-bottom:8px;'+(hasOverride?'opacity:0.5':'')+'">'+inp('Your name','nameA',esc(nameA))+inp('Partner name','nameB',esc(nameB))+'</div>';
+    h+='<div style="display:flex;gap:8px;margin-bottom:8px;'+(hasOverride?'opacity:0.5':'')+'">'+inp('Initial mortgage (£)','initialMortgage',m.initialMortgage||'','e.g. 370000')+inp('Baseline your %','baselinePct',m.baselinePct!=null?m.baselinePct:50)+'</div>';
+    h+='<div style="margin-bottom:8px;'+(hasOverride?'opacity:0.5':'')+'">'+inp('Initial property value (£) — blank if unchanged','initialPropertyValue',m.initialPropertyValue||'','e.g. 420000')+'</div>';
     if(hes){
       h+='<div style="background:#eef4fc;border:1px solid #b8cce8;border-radius:7px;padding:10px;margin-bottom:8px">';
       h+='<div style="display:flex;justify-content:space-between;font-size:14px;font-weight:600;color:#3d6494;margin-bottom:4px"><span>'+esc(nameA)+': '+Math.round(hes.shareA*100)+'%</span><span>'+esc(nameB)+': '+Math.round(hes.shareB*100)+'%</span></div>';
       h+='<div style="display:flex;justify-content:space-between;font-size:12px;color:#6e6558"><span>'+fmt(hes.valueA)+'</span><span>'+fmt(hes.valueB)+'</span></div>';
-      if(hes.appreciation)h+='<div style="font-size:11px;color:#6e6558;margin-top:4px;text-align:center">Includes '+fmt(hes.appreciation)+' appreciation, split by ownership</div>';
+      if(hes.appreciation&&!hes.overridden)h+='<div style="font-size:11px;color:#6e6558;margin-top:4px;text-align:center">Includes '+fmt(hes.appreciation)+' appreciation, split by ownership</div>';
+      if(hes.overridden)h+='<div style="font-size:11px;color:#3d6494;margin-top:4px;text-align:center">Manual override active</div>';
       h+='<div style="font-size:11px;color:#3d6494;margin-top:6px;text-align:center;font-weight:600;border-top:1px solid #b8cce8;padding-top:6px">Your net worth counts '+fmt(hes.valueA)+'</div>';
       h+='</div>';
     }
-    if(!m.initialMortgage)h+='<div style="font-size:11px;color:#b83030;margin-bottom:8px">Enter initial mortgage to calculate the split accurately.</div>';
-    h+=opBlock(m.id,'A',nameA,m.overpaymentsA,opA);
-    h+=opBlock(m.id,'B',nameB,m.overpaymentsB,opB);
+    if(!m.initialMortgage&&!hasOverride)h+='<div style="font-size:11px;color:#b83030;margin-bottom:8px">Enter initial mortgage to calculate the split accurately.</div>';
+    if(!hasOverride){h+=opBlock(m.id,'A',nameA,m.overpaymentsA,opA);h+=opBlock(m.id,'B',nameB,m.overpaymentsB,opB);}
   }
   h+='</div>';
   // Mortgage amortisation details
@@ -1570,10 +1583,11 @@ function render(){
           +'</div>'
         : '')
       +(isStale?
-        '<div style="background:#fff8e6;border-bottom:1px solid #fde99a;padding:10px 16px;display:flex;align-items:center;gap:8px">'
+        '<div onclick="startQuickUpdate()" style="background:#fff8e6;border-bottom:1px solid #fde99a;padding:10px 16px;display:flex;align-items:center;gap:8px;cursor:pointer">'
         +'<span style="font-size:15px">&#x26A0;&#xFE0F;</span>'
-        +'<div><div style="font-size:12px;font-weight:600;color:#8a6200">Balances not updated today</div>'
-        +'<div style="font-size:11px;color:#8a6200">Ready to spend may be inaccurate</div></div>'
+        +'<div style="flex:1"><div style="font-size:12px;font-weight:600;color:#8a6200">Balances not updated today</div>'
+        +'<div style="font-size:11px;color:#8a6200">Tap to run a quick update</div></div>'
+        +'<span style="font-size:12px;font-weight:600;color:#8a6200">&rarr;</span>'
         +'</div>'
       :'')
       +'<div style="padding:14px 16px 4px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#6e6558">Accounts</div>'
@@ -1581,7 +1595,7 @@ function render(){
         var sname=entry[0], sitems=entry[1];
         var stot=sitems.reduce(function(a,x){return a+x.value;},0);
         var sc=stot<0?'vr':stot===0?'':'vg';
-        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-bottom:1px solid #e6e0d4;background:#fdfcf8">'
+        return '<div onclick="Q.tab=\'accounts\';render()" style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;border-bottom:1px solid #e6e0d4;background:#fdfcf8;cursor:pointer">'
           +'<span style="font-size:13px;color:#6e6558">'+esc(sname)+'</span>'
           +'<span style="font-size:14px;font-weight:600" class="'+sc+'">'+fmt(stot)+'</span>'
           +'</div>';
