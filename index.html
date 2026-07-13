@@ -5,10 +5,10 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="app-version" content="22">
+<meta name="app-version" content="23">
 <script>
 // Version check: if cached version differs from this version, force reload
-window.APP_VERSION = '22';
+window.APP_VERSION = '23';
 (function(){
   var stored = localStorage.getItem('app_version');
   if(stored && stored !== window.APP_VERSION){
@@ -1077,7 +1077,38 @@ function buildSheetRows(snap){
     rows.push(['DELETED ITEMS','']);
     S.deletedItems.forEach(function(d){rows.push([d.label+' (deleted)','-']);});
   }
+  // CONFIG row: JSON blob of per-item metadata keyed by label, so a fresh
+  // import can fully reconstruct modes, bill days, pot settings, Home split etc.
+  rows.push(['','']);
+  rows.push(['CONFIG', JSON.stringify(buildConfigMeta())]);
   return rows;
+}
+function buildConfigMeta(){
+  var meta={payday:S.payday, accounts:{}, expenses:{}, nonLiquid:{}};
+  S.accounts.forEach(function(a){ meta.accounts[a.label]={section:a.section||'Other'}; });
+  S.expenses.forEach(function(e){
+    meta.expenses[e.label]={type:e.type, monthly:e.monthly||0,
+      recurMode:e.recurMode||null, billDay:e.billDay||null, paidUntil:e.paidUntil||null,
+      targetMonths:e.targetMonths||null, targetAmount:e.targetAmount||null};
+  });
+  S.nonLiquid.forEach(function(n){
+    var m={ownerShare:n.ownerShare!=null?n.ownerShare:null};
+    if(n.isHome){
+      m.isHome=true; m.splitEnabled=!!n.splitEnabled;
+      m.propertyValue=n.propertyValue||0; m.mortgageValue=n.mortgageValue||0;
+      m.initialMortgage=n.initialMortgage||null; m.initialPropertyValue=n.initialPropertyValue||null;
+      m.baselinePct=n.baselinePct!=null?n.baselinePct:50;
+      m.nameA=n.nameA||'Me'; m.nameB=n.nameB||'Partner';
+      m.overpaymentsA=n.overpaymentsA||[]; m.overpaymentsB=n.overpaymentsB||[];
+      m.overrideSharePct=n.overrideSharePct!=null?n.overrideSharePct:null;
+      m.mortgageRate=n.mortgageRate||null; m.mortgagePayment=n.mortgagePayment||null;
+      m.mortgageTerm=n.mortgageTerm||null;
+      m.mortgageTermRefYear=n.mortgageTermRefYear!=null?n.mortgageTermRefYear:null;
+      m.mortgageTermRefMonth=n.mortgageTermRefMonth!=null?n.mortgageTermRefMonth:null;
+    }
+    meta.nonLiquid[n.label]=m;
+  });
+  return meta;
 }
 function gsImportFromSheet(){
   var url = S.gasUrl && S.gasUrl.trim();
@@ -1097,9 +1128,11 @@ function gsImportFromSheet(){
       var section = '';
       var potBalances = {}, potTargets = {};
       var idCounter = Date.now();
+      var cfg = null;
       rows.forEach(function(row){
         var lbl = String(row.label).trim();
         var val = row.value;
+        if(lbl==='CONFIG'){ try{ cfg=JSON.parse(val); }catch(e){ cfg=null; } return; }
         // Section headers
         if(lbl==='ACCOUNTS'||lbl==='NON-LIQUID'||lbl==='RECURRING EXPENSES'||lbl==='POTS'||lbl==='DELETED ITEMS'||lbl===''){
           section = lbl; return;
@@ -1144,6 +1177,43 @@ function gsImportFromSheet(){
           value:potBalances[lbl], monthly:monthly, type:'pot',
           targetMonths:targetMonths});
       });
+      // Apply CONFIG metadata (survives even when localStorage was wiped)
+      if(cfg){
+        if(cfg.payday!=null) S.payday=cfg.payday;
+        newAccounts.forEach(function(a){
+          var m=cfg.accounts&&cfg.accounts[a.label];
+          if(m&&m.section) a.section=m.section;
+        });
+        newExpenses.forEach(function(e){
+          var m=cfg.expenses&&cfg.expenses[e.label];
+          if(!m) return;
+          if(m.monthly!=null) e.monthly=m.monthly;
+          if(m.recurMode) e.recurMode=m.recurMode;
+          if(m.billDay!=null&&m.billDay!==null) e.billDay=m.billDay;
+          if(m.paidUntil) e.paidUntil=m.paidUntil;
+          if(m.targetMonths!=null&&m.targetMonths!==null) e.targetMonths=m.targetMonths;
+          if(m.targetAmount!=null&&m.targetAmount!==null) e.targetAmount=m.targetAmount;
+        });
+        newNonLiquid.forEach(function(n){
+          var m=cfg.nonLiquid&&cfg.nonLiquid[n.label];
+          if(!m) return;
+          if(m.ownerShare!=null) n.ownerShare=m.ownerShare;
+          if(m.isHome){
+            n.isHome=true; n.splitEnabled=m.splitEnabled;
+            n.propertyValue=m.propertyValue; n.mortgageValue=m.mortgageValue;
+            if(m.initialMortgage!=null) n.initialMortgage=m.initialMortgage;
+            if(m.initialPropertyValue!=null) n.initialPropertyValue=m.initialPropertyValue;
+            n.baselinePct=m.baselinePct; n.nameA=m.nameA; n.nameB=m.nameB;
+            n.overpaymentsA=m.overpaymentsA||[]; n.overpaymentsB=m.overpaymentsB||[];
+            if(m.overrideSharePct!=null) n.overrideSharePct=m.overrideSharePct;
+            if(m.mortgageRate!=null) n.mortgageRate=m.mortgageRate;
+            if(m.mortgagePayment!=null) n.mortgagePayment=m.mortgagePayment;
+            if(m.mortgageTerm!=null) n.mortgageTerm=m.mortgageTerm;
+            if(m.mortgageTermRefYear!=null) n.mortgageTermRefYear=m.mortgageTermRefYear;
+            if(m.mortgageTermRefMonth!=null) n.mortgageTermRefMonth=m.mortgageTermRefMonth;
+          }
+        });
+      }
       // Replace state
       S.accounts = newAccounts;
       S.nonLiquid = newNonLiquid;
